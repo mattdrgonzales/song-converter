@@ -2,21 +2,11 @@ import type { NextRequest } from "next/server";
 
 export const runtime = "edge";
 
-interface OdesliPlatformData {
-  url: string;
-  entityUniqueId: string;
-}
-
-interface OdesliEntity {
+interface SongInfo {
   title: string;
-  artistName: string;
-  thumbnailUrl: string;
-}
-
-interface OdesliResponse {
-  entityUniqueId: string;
-  linksByPlatform: Record<string, OdesliPlatformData>;
-  entitiesByUniqueId: Record<string, OdesliEntity>;
+  artist: string;
+  thumbnail: string;
+  source: string;
 }
 
 interface ConvertResult {
@@ -30,31 +20,119 @@ interface ConvertResult {
   error?: string;
 }
 
-const PLATFORMS = ["spotify", "appleMusic", "youtube"] as const;
-
-const PLATFORM_LABELS: Record<string, string> = {
-  spotify: "Spotify",
-  appleMusic: "Apple Music",
-  youtube: "YouTube",
-};
-
-function isValidMusicUrl(url: string): boolean {
+function detectPlatform(url: string): string | null {
   try {
-    const parsed = new URL(url);
-    const validHosts = [
-      "open.spotify.com",
-      "music.apple.com",
-      "www.youtube.com",
-      "youtube.com",
-      "youtu.be",
-      "music.youtube.com",
-    ];
-    return validHosts.some(
-      (host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`)
-    );
+    const host = new URL(url).hostname;
+    if (host.includes("spotify.com")) return "spotify";
+    if (host.includes("apple.com")) return "apple";
+    if (host.includes("youtube.com") || host.includes("youtu.be")) return "youtube";
+    return null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function extractFromSpotify(url: string): Promise<SongInfo> {
+  // oEmbed gives us title + thumbnail (no artist)
+  const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
+  const oembedRes = await fetch(oembedUrl);
+  if (!oembedRes.ok) throw new Error("Could not fetch song info from Spotify.");
+  const oembed = await oembedRes.json();
+
+  // Fetch OG tags for artist (description format: "Artist · Album · Song · Year")
+  let artist = "Unknown";
+  try {
+    const pageRes = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
+    });
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      const descMatch = html.match(/og:description"\s+content="([^"]+)"/i);
+      if (descMatch) {
+        // First segment before " · " is the artist
+        artist = descMatch[1].split("·")[0].trim() || "Unknown";
+      }
+    }
+  } catch {
+    // Fall back to just the title if page fetch fails
+  }
+
+  return {
+    title: oembed.title ?? "Unknown",
+    artist,
+    thumbnail: oembed.thumbnail_url ?? "",
+    source: "spotify",
+  };
+}
+
+async function extractFromYouTube(url: string): Promise<SongInfo> {
+  const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  const res = await fetch(oembedUrl);
+  if (!res.ok) throw new Error("Could not fetch video info from YouTube.");
+  const data = await res.json();
+  return {
+    title: data.title ?? "Unknown",
+    artist: data.author_name ?? "Unknown",
+    thumbnail: data.thumbnail_url ?? "",
+    source: "youtube",
+  };
+}
+
+async function extractFromAppleMusic(url: string): Promise<SongInfo> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
+  });
+  if (!res.ok) throw new Error("Could not fetch song info from Apple Music.");
+  const html = await res.text();
+
+  const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
+    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
+  const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)
+    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
+  const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i)
+    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:image"/i);
+
+  const rawTitle = titleMatch?.[1] ?? "Unknown";
+  // OG title is often "Song Name - Single" or "Song Name - EP", strip suffix
+  const title = rawTitle.replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "");
+
+  // OG description often contains "A song by Artist Name" or "Song by Artist"
+  const descText = descMatch?.[1] ?? "";
+  const artistFromDesc = descText.match(/(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
+  const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "Unknown";
+
+  return { title, artist, thumbnail: imgMatch?.[1] ?? "", source: "apple" };
+}
+
+function buildSearchLinks(info: SongInfo): { platform: string; url: string }[] {
+  // Clean up the query: use title + artist for search
+  const query = `${info.title} ${info.artist}`.trim();
+  const encoded = encodeURIComponent(query);
+
+  const links: { platform: string; url: string }[] = [];
+
+  if (info.source !== "spotify") {
+    links.push({
+      platform: "Spotify",
+      url: `https://open.spotify.com/search/${encoded}`,
+    });
+  }
+
+  if (info.source !== "apple") {
+    links.push({
+      platform: "Apple Music",
+      url: `https://music.apple.com/us/search?term=${encoded}`,
+    });
+  }
+
+  if (info.source !== "youtube") {
+    links.push({
+      platform: "YouTube",
+      url: `https://www.youtube.com/results?search_query=${encoded}`,
+    });
+  }
+
+  return links;
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -69,7 +147,8 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    if (!isValidMusicUrl(url)) {
+    const platform = detectPlatform(url);
+    if (!platform) {
       return Response.json(
         {
           success: false,
@@ -79,54 +158,32 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    const odesliUrl = `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(url)}&userCountry=US`;
-    const odesliRes = await fetch(odesliUrl);
-
-    if (!odesliRes.ok) {
-      const status = odesliRes.status;
-      if (status === 404) {
+    let info: SongInfo;
+    switch (platform) {
+      case "spotify":
+        info = await extractFromSpotify(url);
+        break;
+      case "youtube":
+        info = await extractFromYouTube(url);
+        break;
+      case "apple":
+        info = await extractFromAppleMusic(url);
+        break;
+      default:
         return Response.json(
-          {
-            success: false,
-            error: "Song not found. Make sure the link points to a specific track.",
-          } satisfies ConvertResult,
-          { status: 404 }
+          { success: false, error: "Unsupported platform." } satisfies ConvertResult,
+          { status: 400 }
         );
-      }
-      if (status === 429) {
-        const retryAfter = parseInt(odesliRes.headers.get("retry-after") ?? "10", 10);
-        return Response.json(
-          {
-            success: false,
-            error: "Rate limited. Retrying...",
-            retryAfter: Math.max(retryAfter, 5),
-          },
-          { status: 429 }
-        );
-      }
-      return Response.json(
-        {
-          success: false,
-          error: `song.link API returned ${status}. Try again in a moment.`,
-        } satisfies ConvertResult,
-        { status: 502 }
-      );
     }
 
-    const data: OdesliResponse = await odesliRes.json();
-    const entity = data.entitiesByUniqueId[data.entityUniqueId];
-
-    const links = PLATFORMS.filter((p) => data.linksByPlatform[p]).map((p) => ({
-      platform: PLATFORM_LABELS[p],
-      url: data.linksByPlatform[p].url,
-    }));
+    const links = buildSearchLinks(info);
 
     return Response.json({
       success: true,
       data: {
-        title: entity?.title ?? "Unknown",
-        artist: entity?.artistName ?? "Unknown",
-        thumbnail: entity?.thumbnailUrl ?? "",
+        title: info.title,
+        artist: info.artist,
+        thumbnail: info.thumbnail,
         links,
       },
     } satisfies ConvertResult);

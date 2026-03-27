@@ -15,7 +15,8 @@ interface SongData {
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
-  Spotify: "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm5.5 17.3c-.2.3-.6.4-1 .2-2.7-1.6-6-2-10-1.1-.4.1-.7-.2-.8-.5-.1-.4.2-.7.5-.8 4.3-1 8.1-.6 11.1 1.2.3.2.4.7.2 1zm1.5-3.3c-.3.4-.8.5-1.2.3-3.1-1.9-7.7-2.4-11.3-1.3-.5.1-1-.1-1.1-.6-.1-.5.1-1 .6-1.1 4.1-1.3 9.2-.7 12.7 1.5.4.2.5.8.3 1.2zm.1-3.4c-3.7-2.2-9.8-2.4-13.3-1.3-.5.2-1.1-.1-1.3-.6-.2-.5.1-1.1.6-1.3 4.1-1.3 10.8-1 15 1.5.5.3.6.9.4 1.4-.3.4-.9.6-1.4.3z",
+  Spotify:
+    "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm5.5 17.3c-.2.3-.6.4-1 .2-2.7-1.6-6-2-10-1.1-.4.1-.7-.2-.8-.5-.1-.4.2-.7.5-.8 4.3-1 8.1-.6 11.1 1.2.3.2.4.7.2 1zm1.5-3.3c-.3.4-.8.5-1.2.3-3.1-1.9-7.7-2.4-11.3-1.3-.5.1-1-.1-1.1-.6-.1-.5.1-1 .6-1.1 4.1-1.3 9.2-.7 12.7 1.5.4.2.5.8.3 1.2zm.1-3.4c-3.7-2.2-9.8-2.4-13.3-1.3-.5.2-1.1-.1-1.3-.6-.2-.5.1-1.1.6-1.3 4.1-1.3 10.8-1 15 1.5.5.3.6.9.4 1.4-.3.4-.9.6-1.4.3z",
   "Apple Music":
     "M23.994 6.124a9.23 9.23 0 00-.24-2.19c-.317-1.31-1.062-2.31-2.18-3.043a5.022 5.022 0 00-1.877-.726 10.496 10.496 0 00-1.564-.15c-.04-.003-.083-.01-.124-.013H5.986c-.152.01-.303.017-.455.026-.747.043-1.49.123-2.193.4-1.336.53-2.3 1.452-2.865 2.78-.192.448-.292.925-.363 1.408-.056.392-.088.785-.1 1.18 0 .032-.007.062-.01.093v12.223c.01.14.017.283.027.424.05.815.154 1.624.497 2.373.65 1.42 1.738 2.353 3.234 2.802.42.127.856.187 1.293.228.555.053 1.11.06 1.667.06h11.03c.525 0 1.048-.034 1.57-.1.823-.106 1.597-.35 2.296-.81a5.046 5.046 0 001.88-2.207c.186-.42.293-.862.358-1.31.083-.567.12-1.137.128-1.71.004-.253.002-.507.002-.76V6.124zM17.07 18.375c0 .076-.004.153-.01.23a1.104 1.104 0 01-.683.916 2.473 2.473 0 01-.636.218c-.553.128-1.09.09-1.592-.2a1.2 1.2 0 01-.62-.9 1.152 1.152 0 01.617-1.19c.296-.15.614-.237.934-.308.34-.075.682-.143 1.02-.225.16-.04.3-.11.377-.274a.63.63 0 00.06-.27V10.2a.503.503 0 00-.372-.508c-.108-.03-.22-.042-.332-.054l-4.542-.492c-.064-.007-.128-.01-.19-.005-.128.013-.236.07-.296.197a.63.63 0 00-.06.27v8.612c0 .089-.003.178-.01.267a1.1 1.1 0 01-.69.917 2.47 2.47 0 01-.636.218c-.554.128-1.09.09-1.592-.2a1.2 1.2 0 01-.62-.9c-.037-.31.07-.584.277-.818.207-.234.473-.375.768-.46.296-.087.6-.15.9-.224.16-.04.322-.078.472-.138.268-.105.397-.3.406-.586V8.29c0-.213.035-.416.148-.6.146-.236.364-.353.627-.32.12.014.24.038.357.063l5.39 1.143c.26.055.47.19.572.45.05.126.074.262.075.4v8.95z",
   YouTube:
@@ -34,7 +35,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [fallbackUrl, setFallbackUrl] = useState("");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -43,7 +43,6 @@ export default function Home() {
     setLoading(true);
     setError("");
     setSong(null);
-    setFallbackUrl("");
 
     try {
       const res = await fetch("/api/convert", {
@@ -53,11 +52,6 @@ export default function Home() {
       });
 
       const data = await res.json();
-
-      if (res.status === 429) {
-        setFallbackUrl(`https://song.link/${encodeURIComponent(url.trim())}`);
-        return;
-      }
 
       if (!data.success) {
         setError(data.error);
@@ -112,22 +106,6 @@ export default function Home() {
           </p>
         )}
 
-        {fallbackUrl && (
-          <div className="mb-4 p-4 rounded-md border border-zinc-200 dark:border-zinc-800">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
-              API is rate limited. View results on song.link instead:
-            </p>
-            <a
-              href={fallbackUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-10 items-center px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-            >
-              Open on song.link
-            </a>
-          </div>
-        )}
-
         {song && (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
@@ -159,14 +137,13 @@ export default function Home() {
                   >
                     <path d={PLATFORM_ICONS[link.platform] ?? ""} />
                   </svg>
-                  <span className="text-sm font-medium w-24">{link.platform}</span>
                   <a
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-zinc-500 dark:text-zinc-400 truncate hover:underline flex-1 min-w-0"
+                    className="text-sm font-medium hover:underline flex-1 min-w-0 truncate"
                   >
-                    {link.url}
+                    Search on {link.platform}
                   </a>
                   <button
                     type="button"
