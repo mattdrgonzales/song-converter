@@ -1,5 +1,7 @@
 import type { NextRequest } from "next/server";
 
+export const runtime = "edge";
+
 interface OdesliPlatformData {
   url: string;
   entityUniqueId: string;
