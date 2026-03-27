@@ -39,6 +39,14 @@ function detectPlatform(url: string): string | null {
 }
 
 async function extractFromSpotify(url: string): Promise<SongInfo> {
+  const parsed = new URL(url);
+
+  // Handle search URLs: /search/{query}
+  if (parsed.pathname.startsWith("/search/")) {
+    const term = decodeURIComponent(parsed.pathname.replace("/search/", ""));
+    return { title: term, artist: "", thumbnail: "", source: "spotify" };
+  }
+
   // oEmbed gives us title + thumbnail (no artist)
   const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
   const oembedRes = await fetch(oembedUrl);
@@ -55,7 +63,6 @@ async function extractFromSpotify(url: string): Promise<SongInfo> {
       const html = await pageRes.text();
       const descMatch = html.match(/og:description"\s+content="([^"]+)"/i);
       if (descMatch) {
-        // First segment before " · " is the artist
         artist = descMatch[1].split("·")[0].trim() || "Unknown";
       }
     }
@@ -72,6 +79,14 @@ async function extractFromSpotify(url: string): Promise<SongInfo> {
 }
 
 async function extractFromYouTube(url: string): Promise<SongInfo> {
+  const parsed = new URL(url);
+
+  // Handle search URLs: /results?search_query=...
+  if (parsed.pathname === "/results" && parsed.searchParams.has("search_query")) {
+    const term = parsed.searchParams.get("search_query") ?? "";
+    return { title: term, artist: "", thumbnail: "", source: "youtube" };
+  }
+
   const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   const res = await fetch(oembedUrl);
   if (!res.ok) throw new Error("Could not fetch video info from YouTube.");
@@ -85,6 +100,16 @@ async function extractFromYouTube(url: string): Promise<SongInfo> {
 }
 
 async function extractFromAppleMusic(url: string): Promise<SongInfo> {
+  const parsed = new URL(url);
+
+  // Handle search URLs: extract the term directly
+  if (parsed.pathname.includes("/search") || parsed.searchParams.has("term")) {
+    const term = parsed.searchParams.get("term") ?? "";
+    if (!term) throw new Error("Could not extract search term from Apple Music URL.");
+    return { title: term, artist: "", thumbnail: "", source: "apple" };
+  }
+
+  // Direct song/album URL: fetch OG tags
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
   });
@@ -99,10 +124,8 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
     ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:image"/i);
 
   const rawTitle = titleMatch?.[1] ?? "Unknown";
-  // OG title is often "Song Name - Single" or "Song Name - EP", strip suffix
   const title = rawTitle.replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "");
 
-  // OG description often contains "A song by Artist Name" or "Song by Artist"
   const descText = descMatch?.[1] ?? "";
   const artistFromDesc = descText.match(/(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
   const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "Unknown";
@@ -141,7 +164,7 @@ async function findYouTubeLink(query: string): Promise<string> {
 }
 
 async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
-  const query = `${info.title} ${info.artist}`.trim();
+  const query = [info.title, info.artist].filter(Boolean).join(" ").trim();
 
   const promises: Promise<PlatformLink>[] = [];
 
