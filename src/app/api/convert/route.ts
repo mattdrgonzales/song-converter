@@ -104,35 +104,64 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
   return { title, artist, thumbnail: imgMatch?.[1] ?? "", source: "apple" };
 }
 
-function buildSearchLinks(info: SongInfo): { platform: string; url: string }[] {
-  // Clean up the query: use title + artist for search
-  const query = `${info.title} ${info.artist}`.trim();
-  const encoded = encodeURIComponent(query);
+async function findAppleMusicLink(query: string): Promise<string> {
+  const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`;
+  const res = await fetch(searchUrl);
+  if (!res.ok) return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
+  const data = await res.json();
+  if (data.resultCount > 0 && data.results[0].trackViewUrl) {
+    // Strip the affiliate "?uo=4" param
+    return data.results[0].trackViewUrl.replace(/\?uo=\d+$/, "");
+  }
+  return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
+}
 
-  const links: { platform: string; url: string }[] = [];
+async function findYouTubeLink(query: string): Promise<string> {
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  try {
+    const res = await fetch(searchUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
+    });
+    if (!res.ok) return searchUrl;
+    const html = await res.text();
+    const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
+    if (match) {
+      return `https://www.youtube.com/watch?v=${match[1]}`;
+    }
+  } catch {
+    // Fall back to search URL
+  }
+  return searchUrl;
+}
+
+async function buildLinks(info: SongInfo): Promise<{ platform: string; url: string }[]> {
+  const query = `${info.title} ${info.artist}`.trim();
+
+  const promises: Promise<{ platform: string; url: string }>[] = [];
 
   if (info.source !== "spotify") {
-    links.push({
-      platform: "Spotify",
-      url: `https://open.spotify.com/search/${encoded}`,
-    });
+    // Spotify has no free search API — keep as search link
+    promises.push(
+      Promise.resolve({
+        platform: "Spotify",
+        url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
+      })
+    );
   }
 
   if (info.source !== "apple") {
-    links.push({
-      platform: "Apple Music",
-      url: `https://music.apple.com/us/search?term=${encoded}`,
-    });
+    promises.push(
+      findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url }))
+    );
   }
 
   if (info.source !== "youtube") {
-    links.push({
-      platform: "YouTube",
-      url: `https://www.youtube.com/results?search_query=${encoded}`,
-    });
+    promises.push(
+      findYouTubeLink(query).then((url) => ({ platform: "YouTube", url }))
+    );
   }
 
-  return links;
+  return Promise.all(promises);
 }
 
 export async function POST(request: NextRequest): Promise<Response> {
@@ -176,7 +205,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         );
     }
 
-    const links = buildSearchLinks(info);
+    const links = await buildLinks(info);
 
     return Response.json({
       success: true,
