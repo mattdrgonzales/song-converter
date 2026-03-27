@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 interface LinkData {
   platform: string;
   url: string;
+  appUrl: string;
 }
 
 interface SongData {
@@ -138,14 +139,12 @@ export default function Home() {
                     <path d={PLATFORM_ICONS[link.platform] ?? ""} />
                   </svg>
                   <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={link.appUrl}
                     className="text-sm font-medium hover:underline flex-1 min-w-0 truncate"
                   >
                     {link.url.includes("/search") || link.url.includes("search_query")
                       ? `Search on ${link.platform}`
-                      : `Open on ${link.platform}`}
+                      : `Open in ${link.platform}`}
                   </a>
                   <button
                     type="button"

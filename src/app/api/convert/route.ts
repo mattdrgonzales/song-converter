@@ -9,13 +9,19 @@ interface SongInfo {
   source: string;
 }
 
+interface PlatformLink {
+  platform: string;
+  url: string;
+  appUrl: string;
+}
+
 interface ConvertResult {
   success: boolean;
   data?: {
     title: string;
     artist: string;
     thumbnail: string;
-    links: { platform: string; url: string }[];
+    links: PlatformLink[];
   };
   error?: string;
 }
@@ -134,30 +140,46 @@ async function findYouTubeLink(query: string): Promise<string> {
   return searchUrl;
 }
 
-async function buildLinks(info: SongInfo): Promise<{ platform: string; url: string }[]> {
+async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
   const query = `${info.title} ${info.artist}`.trim();
 
-  const promises: Promise<{ platform: string; url: string }>[] = [];
+  const promises: Promise<PlatformLink>[] = [];
 
   if (info.source !== "spotify") {
-    // Spotify has no free search API — keep as search link
+    const webUrl = `https://open.spotify.com/search/${encodeURIComponent(query)}`;
     promises.push(
       Promise.resolve({
         platform: "Spotify",
-        url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
+        url: webUrl,
+        appUrl: `spotify:search:${query}`,
       })
     );
   }
 
   if (info.source !== "apple") {
     promises.push(
-      findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url }))
+      findAppleMusicLink(query).then((url) => ({
+        platform: "Apple Music",
+        url,
+        // music:// URI opens Apple Music app directly
+        appUrl: url.replace(/^https:\/\//, "music://"),
+      }))
     );
   }
 
   if (info.source !== "youtube") {
     promises.push(
-      findYouTubeLink(query).then((url) => ({ platform: "YouTube", url }))
+      findYouTubeLink(query).then((url) => {
+        const videoMatch = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        return {
+          platform: "YouTube",
+          url,
+          // vnd.youtube URI opens YouTube app directly
+          appUrl: videoMatch
+            ? `vnd.youtube://www.youtube.com/watch?v=${videoMatch[1]}`
+            : url,
+        };
+      })
     );
   }
 
