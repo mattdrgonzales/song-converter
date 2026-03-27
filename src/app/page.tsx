@@ -34,42 +34,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
-
-  async function convert(songUrl: string, retries = 3): Promise<void> {
-    const res = await fetch("/api/convert", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: songUrl }),
-    });
-
-    const data = await res.json();
-
-    if (res.status === 429 && retries > 0) {
-      const wait = data.retryAfter ?? 5;
-      setError("");
-      setCountdown(wait);
-      await new Promise<void>((resolve) => {
-        let remaining = wait;
-        const timer = setInterval(() => {
-          remaining -= 1;
-          setCountdown(remaining);
-          if (remaining <= 0) {
-            clearInterval(timer);
-            resolve();
-          }
-        }, 1000);
-      });
-      return convert(songUrl, retries - 1);
-    }
-
-    if (!data.success) {
-      setError(data.error);
-      return;
-    }
-
-    setSong(data.data);
-  }
+  const [fallbackUrl, setFallbackUrl] = useState("");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -78,15 +43,32 @@ export default function Home() {
     setLoading(true);
     setError("");
     setSong(null);
-    setCountdown(0);
+    setFallbackUrl("");
 
     try {
-      await convert(url.trim());
+      const res = await fetch("/api/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (res.status === 429) {
+        setFallbackUrl(`https://song.link/${encodeURIComponent(url.trim())}`);
+        return;
+      }
+
+      if (!data.success) {
+        setError(data.error);
+        return;
+      }
+
+      setSong(data.data);
     } catch {
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
-      setCountdown(0);
     }
   }
 
@@ -120,7 +102,7 @@ export default function Home() {
             disabled={loading}
             className="h-10 px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
           >
-            {countdown > 0 ? `Retrying in ${countdown}s` : loading ? "..." : "Convert"}
+            {loading ? "..." : "Convert"}
           </button>
         </form>
 
@@ -128,6 +110,22 @@ export default function Home() {
           <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-4">
             {error}
           </p>
+        )}
+
+        {fallbackUrl && (
+          <div className="mb-4 p-4 rounded-md border border-zinc-200 dark:border-zinc-800">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-3">
+              API is rate limited. View results on song.link instead:
+            </p>
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-10 items-center px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+            >
+              Open on song.link
+            </a>
+          </div>
         )}
 
         {song && (
