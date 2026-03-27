@@ -78,16 +78,10 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const odesliUrl = `https://api.song.link/v1-alpha.1/links?url=${encodeURIComponent(url)}&userCountry=US`;
+    const odesliRes = await fetch(odesliUrl);
 
-    let odesliRes: Response | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      odesliRes = await fetch(odesliUrl);
-      if (odesliRes.status !== 429) break;
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-    }
-
-    if (!odesliRes || !odesliRes.ok) {
-      const status = odesliRes?.status ?? 500;
+    if (!odesliRes.ok) {
+      const status = odesliRes.status;
       if (status === 404) {
         return Response.json(
           {
@@ -95,6 +89,17 @@ export async function POST(request: NextRequest): Promise<Response> {
             error: "Song not found. Make sure the link points to a specific track.",
           } satisfies ConvertResult,
           { status: 404 }
+        );
+      }
+      if (status === 429) {
+        const retryAfter = parseInt(odesliRes.headers.get("retry-after") ?? "10", 10);
+        return Response.json(
+          {
+            success: false,
+            error: "Rate limited. Retrying...",
+            retryAfter: Math.max(retryAfter, 5),
+          },
+          { status: 429 }
         );
       }
       return Response.json(

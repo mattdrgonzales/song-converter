@@ -34,6 +34,42 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+
+  async function convert(songUrl: string, retries = 3): Promise<void> {
+    const res = await fetch("/api/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: songUrl }),
+    });
+
+    const data = await res.json();
+
+    if (res.status === 429 && retries > 0) {
+      const wait = data.retryAfter ?? 5;
+      setError("");
+      setCountdown(wait);
+      await new Promise<void>((resolve) => {
+        let remaining = wait;
+        const timer = setInterval(() => {
+          remaining -= 1;
+          setCountdown(remaining);
+          if (remaining <= 0) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 1000);
+      });
+      return convert(songUrl, retries - 1);
+    }
+
+    if (!data.success) {
+      setError(data.error);
+      return;
+    }
+
+    setSong(data.data);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -42,26 +78,15 @@ export default function Home() {
     setLoading(true);
     setError("");
     setSong(null);
+    setCountdown(0);
 
     try {
-      const res = await fetch("/api/convert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        setError(data.error);
-        return;
-      }
-
-      setSong(data.data);
+      await convert(url.trim());
     } catch {
       setError("Something went wrong. Try again.");
     } finally {
       setLoading(false);
+      setCountdown(0);
     }
   }
 
@@ -95,7 +120,7 @@ export default function Home() {
             disabled={loading}
             className="h-10 px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
           >
-            {loading ? "..." : "Convert"}
+            {countdown > 0 ? `Retrying in ${countdown}s` : loading ? "..." : "Convert"}
           </button>
         </form>
 
