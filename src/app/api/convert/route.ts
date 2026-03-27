@@ -12,7 +12,6 @@ interface SongInfo {
 interface PlatformLink {
   platform: string;
   url: string;
-  appUrl: string;
 }
 
 interface ConvertResult {
@@ -169,40 +168,23 @@ async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
   const promises: Promise<PlatformLink>[] = [];
 
   if (info.source !== "spotify") {
-    const webUrl = `https://open.spotify.com/search/${encodeURIComponent(query)}`;
     promises.push(
       Promise.resolve({
         platform: "Spotify",
-        url: webUrl,
-        appUrl: `spotify:search:${query}`,
+        url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
       })
     );
   }
 
   if (info.source !== "apple") {
     promises.push(
-      findAppleMusicLink(query).then((url) => ({
-        platform: "Apple Music",
-        url,
-        // music:// URI opens Apple Music app directly
-        appUrl: url.replace(/^https:\/\//, "music://"),
-      }))
+      findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url }))
     );
   }
 
   if (info.source !== "youtube") {
     promises.push(
-      findYouTubeLink(query).then((url) => {
-        const videoMatch = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-        return {
-          platform: "YouTube",
-          url,
-          // vnd.youtube URI opens YouTube app directly
-          appUrl: videoMatch
-            ? `vnd.youtube://www.youtube.com/watch?v=${videoMatch[1]}`
-            : url,
-        };
-      })
+      findYouTubeLink(query).then((url) => ({ platform: "YouTube", url }))
     );
   }
 
