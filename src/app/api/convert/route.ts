@@ -217,7 +217,7 @@ async function findSpotifyLink(title: string, artist: string): Promise<string> {
   } catch {
     // fall through
   }
-  return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
+  return "";
 }
 
 async function findAppleMusicLink(title: string, artist: string, isrc?: string): Promise<string> {
@@ -260,7 +260,7 @@ async function findAppleMusicLink(title: string, artist: string, isrc?: string):
     // fall through
   }
 
-  return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
+  return "";
 }
 
 async function findYouTubeLink(title: string, artist: string): Promise<string> {
@@ -281,7 +281,7 @@ async function findYouTubeLink(title: string, artist: string): Promise<string> {
   } catch {
     // fall through
   }
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  return "";
 }
 
 // --- Log conversion to Airtable ---
@@ -365,7 +365,11 @@ async function logConversion(
 
 // --- Build links for the other two platforms ---
 
-async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
+async function buildLinks(info: SongInfo, inputUrl: string): Promise<PlatformLink[]> {
+  const sourcePlatformLabel =
+    info.source === "spotify" ? "Spotify" :
+    info.source === "apple" ? "Apple Music" : "YouTube";
+
   const promises: Promise<PlatformLink>[] = [];
 
   if (info.source !== "spotify") {
@@ -386,7 +390,11 @@ async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
     );
   }
 
-  return Promise.all(promises);
+  const found = await Promise.all(promises);
+  const filtered = found.filter((link) => link.url !== "");
+
+  // Always include the source platform link
+  return [{ platform: sourcePlatformLabel, url: inputUrl }, ...filtered];
 }
 
 // --- Main handler ---
@@ -428,7 +436,7 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
       );
   }
 
-  const links = await buildLinks(info);
+  const links = await buildLinks(info, url);
 
   after(() => logConversion(url, platform, info, links, submittedBy));
 

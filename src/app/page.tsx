@@ -188,7 +188,7 @@ export default function Home() {
       />
       <div className="w-full max-w-lg">
         <h1 className="text-2xl font-semibold tracking-tight mb-1">
-          Song Converter
+          Share Your Music Here
         </h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-8">
           Paste a Spotify, Apple Music, or YouTube link.

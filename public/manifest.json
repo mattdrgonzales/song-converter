@@ -1,6 +1,6 @@
 {
-  "name": "Song Converter",
-  "short_name": "Song Converter",
+  "name": "Share Your Music Here",
+  "short_name": "Share Music",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
