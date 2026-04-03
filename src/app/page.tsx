@@ -56,7 +56,12 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("song-converter-name") ?? "";
+    }
+    return "";
+  });
   const [recent, setRecent] = useState<RecentSong[] | null>(null);
 
   useEffect(() => {
@@ -140,13 +145,20 @@ export default function Home() {
               {loading ? "..." : "Convert"}
             </button>
           </div>
-          <input
-            type="text"
+          <select
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name (optional)"
-            className="w-40 h-8 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-xs outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
-          />
+            onChange={(e) => {
+              setName(e.target.value);
+              localStorage.setItem("song-converter-name", e.target.value);
+            }}
+            className="w-32 h-8 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-xs outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow cursor-pointer"
+          >
+            <option value="">Who are you?</option>
+            <option value="Matty">Matty</option>
+            <option value="Dommy">Dommy</option>
+            <option value="Kelsey">Kelsey</option>
+            <option value="Nicky">Nicky</option>
+          </select>
         </form>
 
         {error && (
