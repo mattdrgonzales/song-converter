@@ -271,6 +271,46 @@ async function findYouTubeLink(title: string, artist: string): Promise<string> {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
+// --- Log conversion to Airtable ---
+
+function logConversion(
+  inputUrl: string,
+  sourcePlatform: string,
+  info: SongInfo,
+  links: PlatformLink[]
+): void {
+  const baseId = process.env.AIRTABLE_BASE_ID;
+  const token = process.env.AIRTABLE_TOKEN;
+  if (!baseId || !token) return;
+
+  const linkMap = Object.fromEntries(links.map((l) => [l.platform, l.url]));
+
+  const platformLabel =
+    sourcePlatform === "spotify" ? "Spotify" :
+    sourcePlatform === "apple" ? "Apple Music" : "YouTube";
+
+  fetch(`https://api.airtable.com/v0/${baseId}/Conversions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fields: {
+        input_url: inputUrl,
+        source_platform: platformLabel,
+        song_title: info.title,
+        artist: info.artist,
+        spotify_link: linkMap["Spotify"] ?? "",
+        apple_music_link: linkMap["Apple Music"] ?? "",
+        youtube_link: linkMap["YouTube"] ?? "",
+      },
+    }),
+  }).catch(() => {
+    // Silently ignore logging failures — don't break conversions
+  });
+}
+
 // --- Build links for the other two platforms ---
 
 async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
@@ -341,6 +381,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     }
 
     const links = await buildLinks(info);
+
+    // Fire-and-forget: log to Airtable without blocking the response
+    logConversion(url, platform, info, links);
 
     return Response.json({
       success: true,
