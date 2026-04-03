@@ -143,9 +143,7 @@ export default function Home() {
                     rel="noopener noreferrer"
                     className="text-sm font-medium hover:underline flex-1 min-w-0 truncate"
                   >
-                    {link.url.includes("/search") || link.url.includes("search_query")
-                      ? `Search on ${link.platform}`
-                      : `Open in ${link.platform}`}
+                    Open in {link.platform}
                   </a>
                   <button
                     type="button"

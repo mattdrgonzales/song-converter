@@ -25,6 +25,36 @@ interface ConvertResult {
   error?: string;
 }
 
+// --- Spotify Auth (Client Credentials) ---
+
+let spotifyToken: string | null = null;
+let spotifyTokenExpiry = 0;
+
+async function getSpotifyToken(): Promise<string> {
+  if (spotifyToken && Date.now() < spotifyTokenExpiry) return spotifyToken;
+
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) throw new Error("Spotify credentials not configured.");
+
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: "grant_type=client_credentials",
+  });
+
+  if (!res.ok) throw new Error("Failed to authenticate with Spotify.");
+  const data = await res.json();
+  spotifyToken = data.access_token;
+  spotifyTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+  return data.access_token;
+}
+
+// --- Platform detection ---
+
 function detectPlatform(url: string): string | null {
   try {
     const host = new URL(url).hostname;
@@ -37,23 +67,15 @@ function detectPlatform(url: string): string | null {
   }
 }
 
+// --- Extract song info from source URL ---
+
 async function extractFromSpotify(url: string): Promise<SongInfo> {
-  const parsed = new URL(url);
-
-  // Handle search URLs: /search/{query}
-  if (parsed.pathname.startsWith("/search/")) {
-    const term = decodeURIComponent(parsed.pathname.replace("/search/", ""));
-    return { title: term, artist: "", thumbnail: "", source: "spotify" };
-  }
-
-  // oEmbed gives us title + thumbnail (no artist)
   const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
   const oembedRes = await fetch(oembedUrl);
   if (!oembedRes.ok) throw new Error("Could not fetch song info from Spotify.");
   const oembed = await oembedRes.json();
 
-  // Fetch OG tags for artist (description format: "Artist · Album · Song · Year")
-  let artist = "Unknown";
+  let artist = "";
   try {
     const pageRes = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
@@ -62,11 +84,11 @@ async function extractFromSpotify(url: string): Promise<SongInfo> {
       const html = await pageRes.text();
       const descMatch = html.match(/og:description"\s+content="([^"]+)"/i);
       if (descMatch) {
-        artist = descMatch[1].split("·")[0].trim() || "Unknown";
+        artist = descMatch[1].split("·")[0].trim();
       }
     }
   } catch {
-    // Fall back to just the title if page fetch fails
+    // title-only fallback
   }
 
   return {
@@ -78,89 +100,98 @@ async function extractFromSpotify(url: string): Promise<SongInfo> {
 }
 
 async function extractFromYouTube(url: string): Promise<SongInfo> {
-  const parsed = new URL(url);
-
-  // Handle search URLs: /results?search_query=...
-  if (parsed.pathname === "/results" && parsed.searchParams.has("search_query")) {
-    const term = parsed.searchParams.get("search_query") ?? "";
-    return { title: term, artist: "", thumbnail: "", source: "youtube" };
-  }
-
   const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
   const res = await fetch(oembedUrl);
   if (!res.ok) throw new Error("Could not fetch video info from YouTube.");
   const data = await res.json();
   return {
     title: data.title ?? "Unknown",
-    artist: data.author_name ?? "Unknown",
+    artist: data.author_name ?? "",
     thumbnail: data.thumbnail_url ?? "",
     source: "youtube",
   };
 }
 
 async function extractFromAppleMusic(url: string): Promise<SongInfo> {
-  const parsed = new URL(url);
-
-  // Handle search URLs: extract the term directly
-  if (parsed.pathname.includes("/search") || parsed.searchParams.has("term")) {
-    const term = parsed.searchParams.get("term") ?? "";
-    if (!term) throw new Error("Could not extract search term from Apple Music URL.");
-    return { title: term, artist: "", thumbnail: "", source: "apple" };
-  }
-
-  // Direct song/album URL: fetch OG tags
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
   });
   if (!res.ok) throw new Error("Could not fetch song info from Apple Music.");
   const html = await res.text();
 
-  const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
-    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:title"/i);
-  const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)
-    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i);
-  const imgMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i)
-    ?? html.match(/<meta\s+content="([^"]+)"\s+property="og:image"/i);
+  const titleMatch = html.match(/<meta\s+(?:property="og:title"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:title")/i);
+  const descMatch = html.match(/<meta\s+(?:property="og:description"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:description")/i);
+  const imgMatch = html.match(/<meta\s+(?:property="og:image"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:image")/i);
 
-  const rawTitle = titleMatch?.[1] ?? "Unknown";
+  const rawTitle = titleMatch?.[1] ?? titleMatch?.[2] ?? "Unknown";
   const title = rawTitle.replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "");
 
-  const descText = descMatch?.[1] ?? "";
+  const descText = descMatch?.[1] ?? descMatch?.[2] ?? "";
   const artistFromDesc = descText.match(/(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
-  const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "Unknown";
+  const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "";
 
-  return { title, artist, thumbnail: imgMatch?.[1] ?? "", source: "apple" };
+  return { title, artist, thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "", source: "apple" };
+}
+
+// --- Find direct links on each platform ---
+
+async function findSpotifyLink(query: string): Promise<string> {
+  try {
+    const token = await getSpotifyToken();
+    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1&market=US`;
+    const res = await fetch(searchUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const track = data.tracks?.items?.[0];
+      if (track?.external_urls?.spotify) {
+        return track.external_urls.spotify;
+      }
+    }
+  } catch {
+    // fall through to search URL
+  }
+  return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
 }
 
 async function findAppleMusicLink(query: string): Promise<string> {
-  const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`;
-  const res = await fetch(searchUrl);
-  if (!res.ok) return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
-  const data = await res.json();
-  if (data.resultCount > 0 && data.results[0].trackViewUrl) {
-    // Strip the affiliate "?uo=4" param
-    return data.results[0].trackViewUrl.replace(/\?uo=\d+$/, "");
+  try {
+    const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`;
+    const res = await fetch(searchUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.resultCount > 0 && data.results[0].trackViewUrl) {
+        return data.results[0].trackViewUrl.replace(/\?uo=\d+$/, "");
+      }
+    }
+  } catch {
+    // fall through to search URL
   }
   return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
 }
 
 async function findYouTubeLink(query: string): Promise<string> {
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   try {
-    const res = await fetch(searchUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
-    });
-    if (!res.ok) return searchUrl;
-    const html = await res.text();
-    const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-    if (match) {
-      return `https://www.youtube.com/watch?v=${match[1]}`;
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (apiKey) {
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=1&key=${apiKey}`;
+      const res = await fetch(searchUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const videoId = data.items?.[0]?.id?.videoId;
+        if (videoId) {
+          return `https://www.youtube.com/watch?v=${videoId}`;
+        }
+      }
     }
   } catch {
-    // Fall back to search URL
+    // fall through to search URL
   }
-  return searchUrl;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
+
+// --- Build links for the other two platforms ---
 
 async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
   const query = [info.title, info.artist].filter(Boolean).join(" ").trim();
@@ -168,28 +199,21 @@ async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
   const promises: Promise<PlatformLink>[] = [];
 
   if (info.source !== "spotify") {
-    promises.push(
-      Promise.resolve({
-        platform: "Spotify",
-        url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
-      })
-    );
+    promises.push(findSpotifyLink(query).then((url) => ({ platform: "Spotify", url })));
   }
 
   if (info.source !== "apple") {
-    promises.push(
-      findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url }))
-    );
+    promises.push(findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url })));
   }
 
   if (info.source !== "youtube") {
-    promises.push(
-      findYouTubeLink(query).then((url) => ({ platform: "YouTube", url }))
-    );
+    promises.push(findYouTubeLink(query).then((url) => ({ platform: "YouTube", url })));
   }
 
   return Promise.all(promises);
 }
+
+// --- Main handler ---
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
