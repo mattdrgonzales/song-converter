@@ -342,21 +342,31 @@ export default function Home() {
                     </span>
                   </p>
                   <div className="flex items-center gap-3 shrink-0">
-                    {s.spotify_link && (
-                      <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
-                        <PlatformIcon platform="Spotify" />
-                      </a>
-                    )}
-                    {s.apple_music_link && (
-                      <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music">
-                        <PlatformIcon platform="Apple Music" />
-                      </a>
-                    )}
-                    {s.youtube_link && (
-                      <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube">
-                        <PlatformIcon platform="YouTube" />
-                      </a>
-                    )}
+                    {(() => {
+                      const hasSpotify = !!s.spotify_link;
+                      const hasApple = !!s.apple_music_link;
+                      const hasYouTube = !!s.youtube_link;
+                      const showYouTube = hasYouTube && (!hasSpotify || !hasApple);
+                      return (
+                        <>
+                          {hasSpotify && (
+                            <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
+                              <PlatformIcon platform="Spotify" />
+                            </a>
+                          )}
+                          {hasApple && (
+                            <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music">
+                              <PlatformIcon platform="Apple Music" />
+                            </a>
+                          )}
+                          {showYouTube && (
+                            <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube">
+                              <PlatformIcon platform="YouTube" />
+                            </a>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}

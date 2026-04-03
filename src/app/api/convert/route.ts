@@ -365,36 +365,47 @@ async function logConversion(
 
 // --- Build links for the other two platforms ---
 
-async function buildLinks(info: SongInfo, inputUrl: string): Promise<PlatformLink[]> {
-  const sourcePlatformLabel =
-    info.source === "spotify" ? "Spotify" :
-    info.source === "apple" ? "Apple Music" : "YouTube";
+interface AllLinks {
+  spotify: string;
+  apple: string;
+  youtube: string;
+}
 
-  const promises: Promise<PlatformLink>[] = [];
+async function findAllLinks(info: SongInfo, inputUrl: string): Promise<AllLinks> {
+  const [spotify, apple, youtube] = await Promise.all([
+    info.source === "spotify"
+      ? Promise.resolve(inputUrl)
+      : findSpotifyLink(info.title, info.artist),
+    info.source === "apple"
+      ? Promise.resolve(inputUrl)
+      : findAppleMusicLink(info.title, info.artist, info.isrc),
+    info.source === "youtube"
+      ? Promise.resolve(inputUrl)
+      : findYouTubeLink(info.title, info.artist),
+  ]);
+  return { spotify, apple, youtube };
+}
 
-  if (info.source !== "spotify") {
-    promises.push(
-      findSpotifyLink(info.title, info.artist).then((url) => ({ platform: "Spotify", url }))
-    );
+function buildDisplayLinks(all: AllLinks): PlatformLink[] {
+  const hasSpotify = all.spotify !== "";
+  const hasApple = all.apple !== "";
+  const hasYouTube = all.youtube !== "";
+
+  // Priority: Spotify + Apple Music if both available
+  // Fallback: whichever streaming service exists + YouTube
+  // YouTube-only: show YouTube alone (DJ sets, obscure content)
+  if (hasSpotify && hasApple) {
+    return [
+      { platform: "Spotify", url: all.spotify },
+      { platform: "Apple Music", url: all.apple },
+    ];
   }
 
-  if (info.source !== "apple") {
-    promises.push(
-      findAppleMusicLink(info.title, info.artist, info.isrc).then((url) => ({ platform: "Apple Music", url }))
-    );
-  }
-
-  if (info.source !== "youtube") {
-    promises.push(
-      findYouTubeLink(info.title, info.artist).then((url) => ({ platform: "YouTube", url }))
-    );
-  }
-
-  const found = await Promise.all(promises);
-  const filtered = found.filter((link) => link.url !== "");
-
-  // Always include the source platform link
-  return [{ platform: sourcePlatformLabel, url: inputUrl }, ...filtered];
+  const links: PlatformLink[] = [];
+  if (hasSpotify) links.push({ platform: "Spotify", url: all.spotify });
+  if (hasApple) links.push({ platform: "Apple Music", url: all.apple });
+  if (hasYouTube) links.push({ platform: "YouTube", url: all.youtube });
+  return links;
 }
 
 // --- Main handler ---
@@ -436,9 +447,16 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
       );
   }
 
-  const links = await buildLinks(info, url);
+  const all = await findAllLinks(info, url);
+  const links = buildDisplayLinks(all);
 
-  after(() => logConversion(url, platform, info, links, submittedBy));
+  // Log ALL platform URLs to Airtable (even ones not displayed)
+  const allLinks: PlatformLink[] = [
+    { platform: "Spotify", url: all.spotify },
+    { platform: "Apple Music", url: all.apple },
+    { platform: "YouTube", url: all.youtube },
+  ];
+  after(() => logConversion(url, platform, info, allLinks, submittedBy));
 
   return Response.json({
     success: true,
