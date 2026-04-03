@@ -107,7 +107,11 @@ export default function Home() {
   }
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4 py-16">
+    <main className="relative flex flex-col items-center justify-center min-h-screen px-4 py-16">
+      <div
+        className="pointer-events-none fixed inset-0 bg-center bg-no-repeat opacity-[0.04]"
+        style={{ backgroundImage: "url(/icon.png)", backgroundSize: "400px" }}
+      />
       <div className="w-full max-w-lg">
         <h1 className="text-2xl font-semibold tracking-tight mb-1">
           Song Converter

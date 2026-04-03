@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Song Converter",
   description: "Convert song links between Spotify, Apple Music, and YouTube",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
