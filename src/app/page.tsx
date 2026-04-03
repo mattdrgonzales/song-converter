@@ -127,38 +127,35 @@ export default function Home() {
           Paste a Spotify, Apple Music, or YouTube link.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-2 mb-8">
+        <form onSubmit={handleSubmit} className="space-y-3 mb-8">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://open.spotify.com/track/..."
+            className="w-full h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
+            required
+          />
           <div className="flex gap-2">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://open.spotify.com/track/..."
-              className="flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
-              required
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-10 px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-            >
-              {loading ? "..." : "Convert"}
-            </button>
+            {["Matty", "Dommy", "Kelsey", "Nicky"].map((n) => (
+              <button
+                key={n}
+                type={name === n ? "submit" : "button"}
+                disabled={loading}
+                onClick={() => {
+                  setName(n);
+                  localStorage.setItem("song-converter-name", n);
+                }}
+                className={`flex-1 h-10 rounded-md text-sm font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  name === n
+                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300"
+                    : "border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-500 dark:hover:border-zinc-500"
+                }`}
+              >
+                {loading && name === n ? "..." : n}
+              </button>
+            ))}
           </div>
-          <select
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              localStorage.setItem("song-converter-name", e.target.value);
-            }}
-            className="w-32 h-8 px-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-xs outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow cursor-pointer"
-          >
-            <option value="">Who are you?</option>
-            <option value="Matty">Matty</option>
-            <option value="Dommy">Dommy</option>
-            <option value="Kelsey">Kelsey</option>
-            <option value="Nicky">Nicky</option>
-          </select>
         </form>
 
         {error && (
