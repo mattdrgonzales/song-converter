@@ -126,6 +126,7 @@ export default function Home() {
   const [recent, setRecent] = useState<RecentSong[] | null>(null);
   const [recentCursor, setRecentCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
   async function fetchRecent(cursor?: string | null, append = false) {
@@ -204,52 +205,84 @@ export default function Home() {
               className="w-full h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
               required
             />
-            {/* Mobile: carousel */}
-            <div className="md:hidden w-full">
-              <PersonCarousel
-                people={PEOPLE}
-                selected={name}
-                loading={loading}
-                onSelect={(n) => {
-                  setName(n);
-                  localStorage.setItem("song-converter-name", n);
-                }}
-              />
-            </div>
-            {/* Desktop: all faces with names */}
-            <div className="hidden md:flex gap-4 justify-center">
-              {PEOPLE.map((person) => (
+            {name && !showPicker ? (
+              <div className="flex items-center gap-3">
                 <button
-                  key={person.name}
-                  type={name === person.name ? "submit" : "button"}
+                  type="submit"
                   disabled={loading}
-                  onClick={() => {
-                    setName(person.name);
-                    localStorage.setItem("song-converter-name", person.name);
-                  }}
-                  className={`flex flex-col items-center gap-1 cursor-pointer transition-all disabled:cursor-not-allowed ${
-                    name === person.name
-                      ? "opacity-100 scale-110"
-                      : "opacity-50 hover:opacity-80"
-                  }`}
+                  className="flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <div
-                    className={`w-12 h-12 rounded-full overflow-hidden ${
-                      name === person.name
-                        ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
-                        : ""
-                    }`}
-                  >
+                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-zinc-950">
                     <img
-                      src={person.img}
-                      alt={person.name}
+                      src={AVATARS[name] ?? ""}
+                      alt={name}
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <span className="text-[10px] text-zinc-400">{person.name}</span>
+                  <span className="text-sm font-medium">
+                    {loading ? "..." : "Convert"}
+                  </span>
                 </button>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(true)}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors"
+                >
+                  switch
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Mobile: carousel */}
+                <div className="md:hidden w-full">
+                  <PersonCarousel
+                    people={PEOPLE}
+                    selected={name}
+                    loading={loading}
+                    onSelect={(n) => {
+                      setName(n);
+                      localStorage.setItem("song-converter-name", n);
+                      setShowPicker(false);
+                    }}
+                  />
+                </div>
+                {/* Desktop: all faces with names */}
+                <div className="hidden md:flex gap-4 justify-center">
+                  {PEOPLE.map((person) => (
+                    <button
+                      key={person.name}
+                      type={name === person.name ? "submit" : "button"}
+                      disabled={loading}
+                      onClick={() => {
+                        setName(person.name);
+                        localStorage.setItem("song-converter-name", person.name);
+                        setShowPicker(false);
+                      }}
+                      className={`flex flex-col items-center gap-1 cursor-pointer transition-all disabled:cursor-not-allowed ${
+                        name === person.name
+                          ? "opacity-100 scale-110"
+                          : "opacity-50 hover:opacity-80"
+                      }`}
+                    >
+                      <div
+                        className={`w-12 h-12 rounded-full overflow-hidden ${
+                          name === person.name
+                            ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
+                            : ""
+                        }`}
+                      >
+                        <img
+                          src={person.img}
+                          alt={person.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-400">{person.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </form>
 
