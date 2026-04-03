@@ -137,46 +137,51 @@ export default function Home() {
         </p>
 
         <form onSubmit={handleSubmit} className="mb-8">
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col md:flex-row gap-3 items-center">
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://open.spotify.com/track/..."
-              className="flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
+              className="w-full md:flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
               required
             />
-            <div className="flex gap-2 justify-center md:justify-start">
-              {[
-                { name: "Matty", img: "/matty.png" },
-                { name: "Dommy", img: "/dommy.png" },
-                { name: "Kelsey", img: "/kelsey.png" },
-                { name: "Nicky", img: "/nicky.png" },
-                { name: "Ninna", img: "/ninna.png" },
-                { name: "Marissa", img: "/marissa.png" },
-              ].map((person) => (
-                <button
-                  key={person.name}
-                  type={name === person.name ? "submit" : "button"}
-                  disabled={loading}
-                  onClick={() => {
-                    setName(person.name);
-                    localStorage.setItem("song-converter-name", person.name);
-                  }}
-                  title={person.name}
-                  className={`w-10 h-10 rounded-full overflow-hidden cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
-                    name === person.name
-                      ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110"
-                      : "opacity-50 hover:opacity-80"
-                  }`}
-                >
-                  <img
-                    src={person.img}
-                    alt={person.name}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
+            <div className="flex items-center gap-1 shrink-0">
+              <div
+                className="flex gap-2 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-1 py-1"
+                style={{ maxWidth: "160px" }}
+              >
+                {[
+                  { name: "Matty", img: "/matty.png" },
+                  { name: "Dommy", img: "/dommy.png" },
+                  { name: "Kelsey", img: "/kelsey.png" },
+                  { name: "Nicky", img: "/nicky.png" },
+                  { name: "Ninna", img: "/ninna.png" },
+                  { name: "Marissa", img: "/marissa.png" },
+                ].map((person) => (
+                  <button
+                    key={person.name}
+                    type={name === person.name ? "submit" : "button"}
+                    disabled={loading}
+                    onClick={() => {
+                      setName(person.name);
+                      localStorage.setItem("song-converter-name", person.name);
+                    }}
+                    title={person.name}
+                    className={`w-11 h-11 rounded-full overflow-hidden cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 snap-center ${
+                      name === person.name
+                        ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110"
+                        : "opacity-50 hover:opacity-80"
+                    }`}
+                  >
+                    <img
+                      src={person.img}
+                      alt={person.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </form>
