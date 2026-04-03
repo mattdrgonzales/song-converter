@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { after } from "next/server";
 
 export const runtime = "edge";
 
@@ -273,12 +274,12 @@ async function findYouTubeLink(title: string, artist: string): Promise<string> {
 
 // --- Log conversion to Airtable ---
 
-function logConversion(
+async function logConversion(
   inputUrl: string,
   sourcePlatform: string,
   info: SongInfo,
   links: PlatformLink[]
-): void {
+): Promise<void> {
   const baseId = process.env.AIRTABLE_BASE_ID;
   const token = process.env.AIRTABLE_TOKEN;
   if (!baseId || !token) return;
@@ -289,7 +290,7 @@ function logConversion(
     sourcePlatform === "spotify" ? "Spotify" :
     sourcePlatform === "apple" ? "Apple Music" : "YouTube";
 
-  fetch(`https://api.airtable.com/v0/${baseId}/Conversions`, {
+  await fetch(`https://api.airtable.com/v0/${baseId}/Conversions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -306,8 +307,6 @@ function logConversion(
         youtube_link: linkMap["YouTube"] ?? "",
       },
     }),
-  }).catch(() => {
-    // Silently ignore logging failures — don't break conversions
   });
 }
 
@@ -382,8 +381,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 
     const links = await buildLinks(info);
 
-    // Fire-and-forget: log to Airtable without blocking the response
-    logConversion(url, platform, info, links);
+    // Log to Airtable after the response is sent (doesn't block the user)
+    after(() => logConversion(url, platform, info, links));
 
     return Response.json({
       success: true,
