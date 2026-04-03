@@ -32,6 +32,13 @@ const PLATFORM_ICONS: Record<string, string> = {
     "M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
 };
 
+const AVATARS: Record<string, string> = {
+  Matty: "/matty.png",
+  Dommy: "/dommy.png",
+  Kelsey: "/kelsey.png",
+  Nicky: "/nicky.png",
+};
+
 const PLATFORM_COLORS: Record<string, string> = {
   Spotify: "#1DB954",
   "Apple Music": "#FA243C",
@@ -241,22 +248,22 @@ export default function Home() {
                   key={`${s.song_title}-${i}`}
                   className="flex items-center gap-2 py-2"
                 >
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-600 tabular-nums w-4 shrink-0">
-                    {i + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">
-                      {s.song_title}
-                      <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                        {" "}&mdash; {s.artist}
-                      </span>
-                    </p>
-                    {s.submitted_by && (
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-600">
-                        {s.submitted_by}
-                      </p>
-                    )}
-                  </div>
+                  {s.submitted_by && AVATARS[s.submitted_by] ? (
+                    <img
+                      src={AVATARS[s.submitted_by]}
+                      alt={s.submitted_by}
+                      title={s.submitted_by}
+                      className="w-6 h-6 rounded-full object-cover shrink-0"
+                    />
+                  ) : (
+                    <span className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-800 shrink-0" />
+                  )}
+                  <p className="flex-1 min-w-0 text-xs font-medium truncate">
+                    {s.song_title}
+                    <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                      {" "}&mdash; {s.artist}
+                    </span>
+                  </p>
                   <div className="flex items-center gap-1 shrink-0">
                     {s.spotify_link && (
                       <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
