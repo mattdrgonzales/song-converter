@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 
 interface LinkData {
   platform: string;
@@ -12,6 +12,14 @@ interface SongData {
   artist: string;
   thumbnail: string;
   links: LinkData[];
+}
+
+interface RecentSong {
+  song_title: string;
+  artist: string;
+  spotify_link: string;
+  apple_music_link: string;
+  youtube_link: string;
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -29,12 +37,32 @@ const PLATFORM_COLORS: Record<string, string> = {
   YouTube: "#FF0000",
 };
 
+function PlatformIcon({ platform }: { platform: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="w-5 h-5 shrink-0"
+      fill={PLATFORM_COLORS[platform] ?? "currentColor"}
+    >
+      <path d={PLATFORM_ICONS[platform] ?? ""} />
+    </svg>
+  );
+}
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [song, setSong] = useState<SongData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentSong[]>([]);
+
+  useEffect(() => {
+    fetch("/api/recent")
+      .then((r) => r.json())
+      .then((d) => setRecent(d.songs ?? []))
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -59,6 +87,12 @@ export default function Home() {
       }
 
       setSong(data.data);
+
+      // Refresh recent list after conversion
+      fetch("/api/recent")
+        .then((r) => r.json())
+        .then((d) => setRecent(d.songs ?? []))
+        .catch(() => {});
     } catch {
       setError("Something went wrong. Try again.");
     } finally {
@@ -107,7 +141,7 @@ export default function Home() {
         )}
 
         {song && (
-          <div className="space-y-4">
+          <div className="space-y-4 mb-10">
             <div className="flex items-center gap-4">
               {song.thumbnail && (
                 <img
@@ -130,13 +164,7 @@ export default function Home() {
                   key={link.platform}
                   className="flex items-center gap-3 p-3 rounded-md border border-zinc-200 dark:border-zinc-800"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-5 h-5 shrink-0"
-                    fill={PLATFORM_COLORS[link.platform] ?? "currentColor"}
-                  >
-                    <path d={PLATFORM_ICONS[link.platform] ?? ""} />
-                  </svg>
+                  <PlatformIcon platform={link.platform} />
                   <a
                     href={link.url}
                     target="_blank"
@@ -152,6 +180,46 @@ export default function Home() {
                   >
                     {copied === link.platform ? "Copied" : "Copy"}
                   </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recent.length > 0 && (
+          <div>
+            <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
+              Recent
+            </h2>
+            <div className="space-y-2">
+              {recent.map((s, i) => (
+                <div
+                  key={`${s.song_title}-${i}`}
+                  className="flex items-center gap-3 p-3 rounded-md border border-zinc-200 dark:border-zinc-800"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{s.song_title}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                      {s.artist}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {s.spotify_link && (
+                      <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
+                        <PlatformIcon platform="Spotify" />
+                      </a>
+                    )}
+                    {s.apple_music_link && (
+                      <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music">
+                        <PlatformIcon platform="Apple Music" />
+                      </a>
+                    )}
+                    {s.youtube_link && (
+                      <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube">
+                        <PlatformIcon platform="YouTube" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
