@@ -37,6 +37,8 @@ const AVATARS: Record<string, string> = {
   Dommy: "/dommy.png",
   Kelsey: "/kelsey.png",
   Nicky: "/nicky.png",
+  Ninna: "/ninna.png",
+  Marissa: "/marissa.png",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -150,6 +152,8 @@ export default function Home() {
                 { name: "Dommy", img: "/dommy.png" },
                 { name: "Kelsey", img: "/kelsey.png" },
                 { name: "Nicky", img: "/nicky.png" },
+                { name: "Ninna", img: "/ninna.png" },
+                { name: "Marissa", img: "/marissa.png" },
               ].map((person) => (
                 <button
                   key={person.name}
