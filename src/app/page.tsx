@@ -59,82 +59,57 @@ function PlatformIcon({ platform }: { platform: string }) {
   );
 }
 
-const VISIBLE = 3;
-
 function PersonCarousel({
   people,
   selected,
   loading,
-  offset,
   onSelect,
-  onOffsetChange,
 }: {
   people: { name: string; img: string }[];
   selected: string;
   loading: boolean;
-  offset: number;
   onSelect: (name: string) => void;
-  onOffsetChange: (offset: number) => void;
 }) {
-  const canLeft = offset > 0;
-  const canRight = offset < people.length - VISIBLE;
-
-  function getOpacity(i: number): string {
-    const relativeToCenter = Math.abs(i - offset - 1);
-    if (relativeToCenter === 0) return "opacity-100";
-    if (relativeToCenter === 1) return "opacity-60";
-    return "opacity-30";
-  }
-
-  const visible = people.slice(offset, offset + VISIBLE);
-
   return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => onOffsetChange(Math.max(0, offset - 1))}
-        className={`text-zinc-500 dark:text-zinc-400 text-lg leading-none cursor-pointer select-none transition-opacity ${
-          canLeft ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        aria-label="Previous"
-      >
-        &lsaquo;
-      </button>
-      <div className="flex gap-3">
-        {visible.map((person, i) => (
-          <button
-            key={person.name}
-            type={selected === person.name ? "submit" : "button"}
-            disabled={loading}
-            onClick={() => onSelect(person.name)}
-            title={person.name}
-            className={`w-12 h-12 rounded-full overflow-hidden cursor-pointer transition-all duration-200 disabled:cursor-not-allowed shrink-0 ${getOpacity(offset + i)} ${
-              selected === person.name
-                ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110 !opacity-100"
-                : "hover:opacity-90"
-            }`}
-          >
-            <img
-              src={person.img}
-              alt={person.name}
-              className="w-full h-full object-cover"
-            />
-          </button>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={() => onOffsetChange(Math.min(people.length - VISIBLE, offset + 1))}
-        className={`text-zinc-500 dark:text-zinc-400 text-lg leading-none cursor-pointer select-none transition-opacity ${
-          canRight ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-        aria-label="Next"
-      >
-        &rsaquo;
-      </button>
+    <div
+      className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide py-1 px-8"
+      style={{
+        maskImage: "linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+        WebkitMaskImage: "linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)",
+      }}
+    >
+      {people.map((person) => (
+        <button
+          key={person.name}
+          type={selected === person.name ? "submit" : "button"}
+          disabled={loading}
+          onClick={() => onSelect(person.name)}
+          title={person.name}
+          className={`w-12 h-12 rounded-full overflow-hidden cursor-pointer transition-all duration-200 disabled:cursor-not-allowed shrink-0 snap-center ${
+            selected === person.name
+              ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110"
+              : "opacity-70 hover:opacity-100"
+          }`}
+        >
+          <img
+            src={person.img}
+            alt={person.name}
+            className="w-full h-full object-cover"
+          />
+        </button>
+      ))}
     </div>
   );
 }
+
+const PEOPLE = [
+  { name: "Matty", img: "/matty.png" },
+  { name: "Dommy", img: "/dommy.png" },
+  { name: "Kelsey", img: "/kelsey.png" },
+  { name: "Nicky", img: "/nicky.png" },
+  { name: "Ninna", img: "/ninna.png" },
+  { name: "Marissa", img: "/marissa.png" },
+];
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -142,7 +117,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [carouselOffset, setCarouselOffset] = useState(0);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const [name, setName] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("song-converter-name") ?? "";
@@ -224,24 +199,52 @@ export default function Home() {
               className="w-full h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
               required
             />
-            <PersonCarousel
-              people={[
-                { name: "Matty", img: "/matty.png" },
-                { name: "Dommy", img: "/dommy.png" },
-                { name: "Kelsey", img: "/kelsey.png" },
-                { name: "Nicky", img: "/nicky.png" },
-                { name: "Ninna", img: "/ninna.png" },
-                { name: "Marissa", img: "/marissa.png" },
-              ]}
-              selected={name}
-              loading={loading}
-              offset={carouselOffset}
-              onSelect={(n) => {
-                setName(n);
-                localStorage.setItem("song-converter-name", n);
-              }}
-              onOffsetChange={setCarouselOffset}
-            />
+            {/* Mobile: carousel */}
+            <div className="md:hidden w-full">
+              <PersonCarousel
+                people={PEOPLE}
+                selected={name}
+                loading={loading}
+                onSelect={(n) => {
+                  setName(n);
+                  localStorage.setItem("song-converter-name", n);
+                }}
+              />
+            </div>
+            {/* Desktop: all faces with names */}
+            <div className="hidden md:flex gap-4 justify-center">
+              {PEOPLE.map((person) => (
+                <button
+                  key={person.name}
+                  type={name === person.name ? "submit" : "button"}
+                  disabled={loading}
+                  onClick={() => {
+                    setName(person.name);
+                    localStorage.setItem("song-converter-name", person.name);
+                  }}
+                  className={`flex flex-col items-center gap-1 cursor-pointer transition-all disabled:cursor-not-allowed ${
+                    name === person.name
+                      ? "opacity-100 scale-110"
+                      : "opacity-50 hover:opacity-80"
+                  }`}
+                >
+                  <div
+                    className={`w-12 h-12 rounded-full overflow-hidden ${
+                      name === person.name
+                        ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
+                        : ""
+                    }`}
+                  >
+                    <img
+                      src={person.img}
+                      alt={person.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="text-[10px] text-zinc-400">{person.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </form>
 
@@ -310,8 +313,9 @@ export default function Home() {
           ) : recent.length === 0 ? (
             <p className="text-xs text-zinc-400 dark:text-zinc-600">No conversions yet.</p>
           ) : (
+            <>
             <div className="space-y-0 divide-y divide-zinc-100 dark:divide-zinc-800/50">
-              {recent.map((s, i) => (
+              {(showAllRecent ? recent : recent.slice(0, 5)).map((s, i) => (
                 <div
                   key={`${s.song_title}-${i}`}
                   className="flex items-center gap-2 py-2"
@@ -352,6 +356,16 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            {!showAllRecent && recent.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAllRecent(true)}
+                className="mt-2 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-pointer transition-colors"
+              >
+                more
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>
