@@ -376,61 +376,76 @@ async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
 
 // --- Main handler ---
 
+async function handleConvert(url: string): Promise<Response> {
+  if (!url) {
+    return Response.json(
+      { success: false, error: "Please provide a URL." } satisfies ConvertResult,
+      { status: 400 }
+    );
+  }
+
+  const platform = detectPlatform(url);
+  if (!platform) {
+    return Response.json(
+      {
+        success: false,
+        error: "Paste a link from Spotify, Apple Music, or YouTube.",
+      } satisfies ConvertResult,
+      { status: 400 }
+    );
+  }
+
+  let info: SongInfo;
+  switch (platform) {
+    case "spotify":
+      info = await extractFromSpotify(url);
+      break;
+    case "youtube":
+      info = await extractFromYouTube(url);
+      break;
+    case "apple":
+      info = await extractFromAppleMusic(url);
+      break;
+    default:
+      return Response.json(
+        { success: false, error: "Unsupported platform." } satisfies ConvertResult,
+        { status: 400 }
+      );
+  }
+
+  const links = await buildLinks(info);
+
+  after(() => logConversion(url, platform, info, links));
+
+  return Response.json({
+    success: true,
+    data: {
+      title: info.title,
+      artist: info.artist,
+      thumbnail: info.thumbnail,
+      links,
+    },
+  } satisfies ConvertResult);
+}
+
 export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
     const url = typeof body.url === "string" ? body.url.trim() : "";
+    return handleConvert(url);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    return Response.json(
+      { success: false, error: message } satisfies ConvertResult,
+      { status: 500 }
+    );
+  }
+}
 
-    if (!url) {
-      return Response.json(
-        { success: false, error: "Please provide a URL." } satisfies ConvertResult,
-        { status: 400 }
-      );
-    }
-
-    const platform = detectPlatform(url);
-    if (!platform) {
-      return Response.json(
-        {
-          success: false,
-          error: "Paste a link from Spotify, Apple Music, or YouTube.",
-        } satisfies ConvertResult,
-        { status: 400 }
-      );
-    }
-
-    let info: SongInfo;
-    switch (platform) {
-      case "spotify":
-        info = await extractFromSpotify(url);
-        break;
-      case "youtube":
-        info = await extractFromYouTube(url);
-        break;
-      case "apple":
-        info = await extractFromAppleMusic(url);
-        break;
-      default:
-        return Response.json(
-          { success: false, error: "Unsupported platform." } satisfies ConvertResult,
-          { status: 400 }
-        );
-    }
-
-    const links = await buildLinks(info);
-
-    // Log to Airtable after the response is sent (doesn't block the user)
-    after(() => logConversion(url, platform, info, links));
-
-    return Response.json({
-      success: true,
-      data: {
-        title: info.title,
-        artist: info.artist,
-        thumbnail: info.thumbnail,
-        links,
-      },
-    } satisfies ConvertResult);
+export async function GET(request: NextRequest): Promise<Response> {
+  try {
+    const url = request.nextUrl.searchParams.get("url")?.trim() ?? "";
+    return handleConvert(url);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return Response.json(
