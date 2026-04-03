@@ -55,13 +55,13 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [recent, setRecent] = useState<RecentSong[]>([]);
+  const [recent, setRecent] = useState<RecentSong[] | null>(null);
 
   useEffect(() => {
     fetch("/api/recent")
       .then((r) => r.json())
       .then((d) => setRecent(d.songs ?? []))
-      .catch(() => {});
+      .catch(() => setRecent([]));
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -190,45 +190,66 @@ export default function Home() {
           </div>
         )}
 
-        {recent.length > 0 && (
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-3">
-              Recent
-            </h2>
-            <div className="space-y-2">
-              {recent.map((s, i) => (
-                <div
-                  key={`${s.song_title}-${i}`}
-                  className="flex items-center gap-3 p-3 rounded-md border border-zinc-200 dark:border-zinc-800"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{s.song_title}</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                      {s.artist}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {s.spotify_link && (
-                      <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
-                        <PlatformIcon platform="Spotify" />
-                      </a>
-                    )}
-                    {s.apple_music_link && (
-                      <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music">
-                        <PlatformIcon platform="Apple Music" />
-                      </a>
-                    )}
-                    {s.youtube_link && (
-                      <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube">
-                        <PlatformIcon platform="YouTube" />
-                      </a>
-                    )}
-                  </div>
-                </div>
+        <div>
+          <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
+            Recent
+          </h2>
+          {recent === null ? (
+            <div className="space-y-1.5">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-7 rounded bg-zinc-100 dark:bg-zinc-800/50 animate-pulse" />
               ))}
             </div>
-          </div>
-        )}
+          ) : recent.length === 0 ? (
+            <p className="text-xs text-zinc-400 dark:text-zinc-600">No conversions yet.</p>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-zinc-400 dark:text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="pb-1.5 pr-2 font-medium w-6">#</th>
+                  <th className="pb-1.5 pr-2 font-medium">Song</th>
+                  <th className="pb-1.5 pr-2 font-medium">Artist</th>
+                  <th className="pb-1.5 font-medium text-right w-20">Links</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((s, i) => (
+                  <tr
+                    key={`${s.song_title}-${i}`}
+                    className="border-b border-zinc-100 dark:border-zinc-800/50 last:border-0"
+                  >
+                    <td className="py-1.5 pr-2 text-zinc-400 dark:text-zinc-600 tabular-nums">
+                      {i + 1}
+                    </td>
+                    <td className="py-1.5 pr-2 truncate max-w-[140px]">{s.song_title}</td>
+                    <td className="py-1.5 pr-2 truncate max-w-[120px] text-zinc-500 dark:text-zinc-400">
+                      {s.artist}
+                    </td>
+                    <td className="py-1.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {s.spotify_link && (
+                          <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
+                            <PlatformIcon platform="Spotify" />
+                          </a>
+                        )}
+                        {s.apple_music_link && (
+                          <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music">
+                            <PlatformIcon platform="Apple Music" />
+                          </a>
+                        )}
+                        {s.youtube_link && (
+                          <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube">
+                            <PlatformIcon platform="YouTube" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </main>
   );
