@@ -159,19 +159,31 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
   const imgMatch = html.match(/<meta\s+(?:property="og:image"\s+content="([^"]+)"|content="([^"]+)"\s+property="og:image")/i);
 
   const rawTitle = titleMatch?.[1] ?? titleMatch?.[2] ?? "Unknown";
-  const title = rawTitle.replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "");
 
+  // OG title formats: "Song Name - Single", "Song Name by Artist on Apple Music"
+  let title = rawTitle
+    .replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "")
+    .replace(/\s+on\s+Apple\s*Music.*$/i, "");
+
+  // Extract artist from "Song by Artist" pattern in title
+  let artistFromTitle = "";
+  const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
+  if (byMatch) {
+    title = byMatch[1].trim();
+    artistFromTitle = byMatch[2].trim();
+  }
+
+  // Also try the description: "A song by Artist on Apple Music" or "Artist · Album · ..."
   const descText = descMatch?.[1] ?? descMatch?.[2] ?? "";
-  const artistFromDesc = descText.match(/(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
-  const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "";
+  const artistFromDesc = descText.match(/(?:a\s+)?(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
+  const artistFromDot = descText.split("·")[0]?.trim();
 
-  return {
-    title,
-    artist,
-    thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "",
-    source: "apple",
-    isrc: trackIdMatch?.[1] ? undefined : undefined, // no ISRC from Apple Music pages
-  };
+  const artist = artistFromTitle
+    || artistFromDesc?.[1]
+    || (artistFromDot && !["song", "album", "single", "ep"].includes(artistFromDot.toLowerCase()) ? artistFromDot : "")
+    || "";
+
+  return { title, artist, thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "", source: "apple" };
 }
 
 // --- Find direct links on each platform ---
@@ -278,7 +290,8 @@ async function logConversion(
   inputUrl: string,
   sourcePlatform: string,
   info: SongInfo,
-  links: PlatformLink[]
+  links: PlatformLink[],
+  submittedBy?: string
 ): Promise<void> {
   const baseId = process.env.AIRTABLE_BASE_ID;
   const token = process.env.AIRTABLE_TOKEN;
@@ -320,6 +333,7 @@ async function logConversion(
             apple_music_link: linkMap["Apple Music"] ?? existing.fields?.apple_music_link ?? "",
             youtube_link: linkMap["YouTube"] ?? existing.fields?.youtube_link ?? "",
             isrc: info.isrc ?? existing.fields?.isrc ?? "",
+            ...(submittedBy ? { submitted_by: submittedBy } : {}),
           },
         }),
       });
@@ -343,6 +357,7 @@ async function logConversion(
         isrc: info.isrc ?? "",
         count: 1,
         last_searched: now,
+        ...(submittedBy ? { submitted_by: submittedBy } : {}),
       },
     }),
   });
@@ -376,7 +391,7 @@ async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
 
 // --- Main handler ---
 
-async function handleConvert(url: string): Promise<Response> {
+async function handleConvert(url: string, submittedBy?: string): Promise<Response> {
   if (!url) {
     return Response.json(
       { success: false, error: "Please provide a URL." } satisfies ConvertResult,
@@ -415,7 +430,7 @@ async function handleConvert(url: string): Promise<Response> {
 
   const links = await buildLinks(info);
 
-  after(() => logConversion(url, platform, info, links));
+  after(() => logConversion(url, platform, info, links, submittedBy));
 
   return Response.json({
     success: true,
@@ -432,7 +447,8 @@ export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
     const url = typeof body.url === "string" ? body.url.trim() : "";
-    return handleConvert(url);
+    const submittedBy = typeof body.submitted_by === "string" ? body.submitted_by.trim() : undefined;
+    return handleConvert(url, submittedBy);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return Response.json(
@@ -445,7 +461,8 @@ export async function POST(request: NextRequest): Promise<Response> {
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     const url = request.nextUrl.searchParams.get("url")?.trim() ?? "";
-    return handleConvert(url);
+    const submittedBy = request.nextUrl.searchParams.get("by")?.trim() || undefined;
+    return handleConvert(url, submittedBy);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return Response.json(

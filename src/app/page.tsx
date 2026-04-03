@@ -20,6 +20,7 @@ interface RecentSong {
   spotify_link: string;
   apple_music_link: string;
   youtube_link: string;
+  submitted_by: string;
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -55,6 +56,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [name, setName] = useState("");
   const [recent, setRecent] = useState<RecentSong[] | null>(null);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export default function Home() {
       const res = await fetch("/api/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: url.trim(), submitted_by: name.trim() || undefined }),
       });
 
       const data = await res.json();
@@ -120,22 +122,31 @@ export default function Home() {
           Paste a Spotify, Apple Music, or YouTube link.
         </p>
 
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
+        <form onSubmit={handleSubmit} className="space-y-2 mb-8">
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://open.spotify.com/track/..."
+              className="flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
+              required
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="h-10 px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+            >
+              {loading ? "..." : "Convert"}
+            </button>
+          </div>
           <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://open.spotify.com/track/..."
-            className="flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
-            required
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name (optional)"
+            className="w-40 h-8 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-xs outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
           />
-          <button
-            type="submit"
-            disabled={loading}
-            className="h-10 px-4 rounded-md bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-          >
-            {loading ? "..." : "Convert"}
-          </button>
         </form>
 
         {error && (
@@ -209,6 +220,7 @@ export default function Home() {
                   <th className="pb-1.5 pr-2 font-medium w-6">#</th>
                   <th className="pb-1.5 pr-2 font-medium">Song</th>
                   <th className="pb-1.5 pr-2 font-medium">Artist</th>
+                  <th className="pb-1.5 pr-2 font-medium">By</th>
                   <th className="pb-1.5 font-medium text-right w-20">Links</th>
                 </tr>
               </thead>
@@ -224,6 +236,9 @@ export default function Home() {
                     <td className="py-1.5 pr-2 truncate max-w-[140px]">{s.song_title}</td>
                     <td className="py-1.5 pr-2 truncate max-w-[120px] text-zinc-500 dark:text-zinc-400">
                       {s.artist}
+                    </td>
+                    <td className="py-1.5 pr-2 truncate max-w-[80px] text-zinc-500 dark:text-zinc-400">
+                      {s.submitted_by}
                     </td>
                     <td className="py-1.5">
                       <div className="flex items-center justify-end gap-1.5">
