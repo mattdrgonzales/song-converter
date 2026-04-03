@@ -206,11 +206,11 @@ export default function Home() {
               required
             />
             {name && !showPicker ? (
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center gap-1">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex flex-col items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-zinc-950">
                     <img
@@ -219,7 +219,7 @@ export default function Home() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <span className="text-sm font-medium">
+                  <span className="text-[10px] text-zinc-400">
                     {loading ? "..." : "Convert"}
                   </span>
                 </button>
@@ -228,7 +228,7 @@ export default function Home() {
                   onClick={() => setShowPicker(true)}
                   className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors"
                 >
-                  switch
+                  change profile
                 </button>
               </div>
             ) : (
