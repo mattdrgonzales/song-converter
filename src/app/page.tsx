@@ -59,12 +59,90 @@ function PlatformIcon({ platform }: { platform: string }) {
   );
 }
 
+const VISIBLE = 3;
+
+function PersonCarousel({
+  people,
+  selected,
+  loading,
+  offset,
+  onSelect,
+  onOffsetChange,
+}: {
+  people: { name: string; img: string }[];
+  selected: string;
+  loading: boolean;
+  offset: number;
+  onSelect: (name: string) => void;
+  onOffsetChange: (offset: number) => void;
+}) {
+  const canLeft = offset > 0;
+  const canRight = offset < people.length - VISIBLE;
+
+  function getOpacity(i: number): string {
+    const relativeToCenter = Math.abs(i - offset - 1);
+    if (relativeToCenter === 0) return "opacity-100";
+    if (relativeToCenter === 1) return "opacity-60";
+    return "opacity-30";
+  }
+
+  const visible = people.slice(offset, offset + VISIBLE);
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onOffsetChange(Math.max(0, offset - 1))}
+        className={`text-zinc-500 dark:text-zinc-400 text-lg leading-none cursor-pointer select-none transition-opacity ${
+          canLeft ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        aria-label="Previous"
+      >
+        &lsaquo;
+      </button>
+      <div className="flex gap-3">
+        {visible.map((person, i) => (
+          <button
+            key={person.name}
+            type={selected === person.name ? "submit" : "button"}
+            disabled={loading}
+            onClick={() => onSelect(person.name)}
+            title={person.name}
+            className={`w-12 h-12 rounded-full overflow-hidden cursor-pointer transition-all duration-200 disabled:cursor-not-allowed shrink-0 ${getOpacity(offset + i)} ${
+              selected === person.name
+                ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110 !opacity-100"
+                : "hover:opacity-90"
+            }`}
+          >
+            <img
+              src={person.img}
+              alt={person.name}
+              className="w-full h-full object-cover"
+            />
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => onOffsetChange(Math.min(people.length - VISIBLE, offset + 1))}
+        className={`text-zinc-500 dark:text-zinc-400 text-lg leading-none cursor-pointer select-none transition-opacity ${
+          canRight ? "opacity-60 hover:opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        aria-label="Next"
+      >
+        &rsaquo;
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [song, setSong] = useState<SongData | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [carouselOffset, setCarouselOffset] = useState(0);
   const [name, setName] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("song-converter-name") ?? "";
@@ -137,52 +215,33 @@ export default function Home() {
         </p>
 
         <form onSubmit={handleSubmit} className="mb-8">
-          <div className="flex flex-col md:flex-row gap-3 items-center">
+          <div className="flex flex-col gap-3 items-center">
             <input
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://open.spotify.com/track/..."
-              className="w-full md:flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
+              className="w-full h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
               required
             />
-            <div className="flex items-center gap-1 shrink-0">
-              <div
-                className="flex gap-2 overflow-x-auto snap-x snap-mandatory scrollbar-hide px-1 py-1"
-                style={{ maxWidth: "160px" }}
-              >
-                {[
-                  { name: "Matty", img: "/matty.png" },
-                  { name: "Dommy", img: "/dommy.png" },
-                  { name: "Kelsey", img: "/kelsey.png" },
-                  { name: "Nicky", img: "/nicky.png" },
-                  { name: "Ninna", img: "/ninna.png" },
-                  { name: "Marissa", img: "/marissa.png" },
-                ].map((person) => (
-                  <button
-                    key={person.name}
-                    type={name === person.name ? "submit" : "button"}
-                    disabled={loading}
-                    onClick={() => {
-                      setName(person.name);
-                      localStorage.setItem("song-converter-name", person.name);
-                    }}
-                    title={person.name}
-                    className={`w-11 h-11 rounded-full overflow-hidden cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 snap-center ${
-                      name === person.name
-                        ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110"
-                        : "opacity-50 hover:opacity-80"
-                    }`}
-                  >
-                    <img
-                      src={person.img}
-                      alt={person.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
+            <PersonCarousel
+              people={[
+                { name: "Matty", img: "/matty.png" },
+                { name: "Dommy", img: "/dommy.png" },
+                { name: "Kelsey", img: "/kelsey.png" },
+                { name: "Nicky", img: "/nicky.png" },
+                { name: "Ninna", img: "/ninna.png" },
+                { name: "Marissa", img: "/marissa.png" },
+              ]}
+              selected={name}
+              loading={loading}
+              offset={carouselOffset}
+              onSelect={(n) => {
+                setName(n);
+                localStorage.setItem("song-converter-name", n);
+              }}
+              onOffsetChange={setCarouselOffset}
+            />
           </div>
         </form>
 
