@@ -341,7 +341,7 @@ export default function Home() {
                       {" "}&mdash; {s.artist}
                     </span>
                   </p>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-3 shrink-0">
                     {s.spotify_link && (
                       <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify">
                         <PlatformIcon platform="Spotify" />
