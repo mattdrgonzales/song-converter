@@ -206,7 +206,7 @@ export default function Home() {
               required
             />
             {name && !showPicker ? (
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-center gap-3">
                 <button
                   type="submit"
                   disabled={loading}
