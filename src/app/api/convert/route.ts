@@ -284,18 +284,53 @@ async function logConversion(
   const token = process.env.AIRTABLE_TOKEN;
   if (!baseId || !token) return;
 
-  const linkMap = Object.fromEntries(links.map((l) => [l.platform, l.url]));
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  const tableUrl = `https://api.airtable.com/v0/${baseId}/Conversions`;
 
+  const linkMap = Object.fromEntries(links.map((l) => [l.platform, l.url]));
   const platformLabel =
     sourcePlatform === "spotify" ? "Spotify" :
     sourcePlatform === "apple" ? "Apple Music" : "YouTube";
+  const now = new Date().toISOString();
 
-  await fetch(`https://api.airtable.com/v0/${baseId}/Conversions`, {
+  // Check if this song already has a record (match on song_title + artist)
+  const filterFormula = `AND({song_title}="${info.title.replace(/"/g, '\\"')}",{artist}="${info.artist.replace(/"/g, '\\"')}")`;
+  const searchUrl = `${tableUrl}?filterByFormula=${encodeURIComponent(filterFormula)}&maxRecords=1`;
+  const searchRes = await fetch(searchUrl, { headers });
+
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    const existing = searchData.records?.[0];
+
+    if (existing) {
+      // Update: increment count, update last_searched and links
+      const currentCount = (existing.fields?.count as number) ?? 1;
+      await fetch(`${tableUrl}/${existing.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          fields: {
+            count: currentCount + 1,
+            last_searched: now,
+            input_url: inputUrl,
+            spotify_link: linkMap["Spotify"] ?? existing.fields?.spotify_link ?? "",
+            apple_music_link: linkMap["Apple Music"] ?? existing.fields?.apple_music_link ?? "",
+            youtube_link: linkMap["YouTube"] ?? existing.fields?.youtube_link ?? "",
+            isrc: info.isrc ?? existing.fields?.isrc ?? "",
+          },
+        }),
+      });
+      return;
+    }
+  }
+
+  // Create new record
+  await fetch(tableUrl, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       fields: {
         input_url: inputUrl,
@@ -305,6 +340,9 @@ async function logConversion(
         spotify_link: linkMap["Spotify"] ?? "",
         apple_music_link: linkMap["Apple Music"] ?? "",
         youtube_link: linkMap["YouTube"] ?? "",
+        isrc: info.isrc ?? "",
+        count: 1,
+        last_searched: now,
       },
     }),
   });
