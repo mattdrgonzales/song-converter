@@ -117,7 +117,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [showAllRecent, setShowAllRecent] = useState(false);
   const [name, setName] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("song-converter-name") ?? "";
@@ -125,12 +124,21 @@ export default function Home() {
     return "";
   });
   const [recent, setRecent] = useState<RecentSong[] | null>(null);
+  const [recentCursor, setRecentCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  async function fetchRecent(cursor?: string | null, append = false) {
+    const params = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    const res = await fetch(`/api/recent${params}`);
+    const d = await res.json();
+    setRecent((prev) => append ? [...(prev ?? []), ...(d.songs ?? [])] : d.songs ?? []);
+    setRecentCursor(d.cursor ?? null);
+    setHasMore(d.hasMore ?? false);
+  }
 
   useEffect(() => {
-    fetch("/api/recent")
-      .then((r) => r.json())
-      .then((d) => setRecent(d.songs ?? []))
-      .catch(() => setRecent([]));
+    fetchRecent().catch(() => setRecent([]));
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -157,11 +165,8 @@ export default function Home() {
 
       setSong(data.data);
 
-      // Refresh recent list after conversion
-      fetch("/api/recent")
-        .then((r) => r.json())
-        .then((d) => setRecent(d.songs ?? []))
-        .catch(() => {});
+      // Refresh recent list from the beginning after conversion
+      fetchRecent().catch(() => {});
     } catch {
       setError("Something went wrong. Try again.");
     } finally {
@@ -315,7 +320,7 @@ export default function Home() {
           ) : (
             <>
             <div className="space-y-0 divide-y divide-zinc-100 dark:divide-zinc-800/50">
-              {(showAllRecent ? recent : recent.slice(0, 5)).map((s, i) => (
+              {recent.map((s, i) => (
                 <div
                   key={`${s.song_title}-${i}`}
                   className="flex items-center gap-2 py-2"
@@ -356,13 +361,18 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            {!showAllRecent && recent.length > 5 && (
+            {hasMore && (
               <button
                 type="button"
-                onClick={() => setShowAllRecent(true)}
-                className="mt-2 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-pointer transition-colors"
+                disabled={loadingMore}
+                onClick={async () => {
+                  setLoadingMore(true);
+                  await fetchRecent(recentCursor, true).catch(() => {});
+                  setLoadingMore(false);
+                }}
+                className="mt-2 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-pointer transition-colors disabled:opacity-50"
               >
-                more
+                {loadingMore ? "..." : "more"}
               </button>
             )}
             </>

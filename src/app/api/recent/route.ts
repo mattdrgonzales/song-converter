@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+
 export const runtime = "edge";
 
 interface RecentSong {
@@ -9,16 +11,23 @@ interface RecentSong {
   submitted_by: string;
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(request: NextRequest): Promise<Response> {
   const baseId = process.env.AIRTABLE_BASE_ID;
   const token = process.env.AIRTABLE_TOKEN;
 
   if (!baseId || !token) {
-    return Response.json({ songs: [] });
+    return Response.json({ songs: [], hasMore: false });
   }
 
+  const cursor = request.nextUrl.searchParams.get("cursor") ?? "";
+  const pageSize = 5;
+
   try {
-    const url = `https://api.airtable.com/v0/${baseId}/Conversions?maxRecords=10&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by`;
+    let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by`;
+
+    if (cursor) {
+      url += `&offset=${encodeURIComponent(cursor)}`;
+    }
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -26,7 +35,7 @@ export async function GET(): Promise<Response> {
     });
 
     if (!res.ok) {
-      return Response.json({ songs: [] });
+      return Response.json({ songs: [], hasMore: false });
     }
 
     const data = await res.json();
@@ -42,10 +51,14 @@ export async function GET(): Promise<Response> {
     );
 
     return Response.json(
-      { songs },
+      {
+        songs,
+        cursor: data.offset ?? null,
+        hasMore: !!data.offset,
+      },
       { headers: { "Cache-Control": "s-maxage=0, stale-while-revalidate" } }
     );
   } catch {
-    return Response.json({ songs: [] });
+    return Response.json({ songs: [], hasMore: false });
   }
 }
