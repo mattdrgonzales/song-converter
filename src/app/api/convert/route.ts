@@ -7,6 +7,7 @@ interface SongInfo {
   artist: string;
   thumbnail: string;
   source: string;
+  isrc?: string;
 }
 
 interface PlatformLink {
@@ -67,9 +68,39 @@ function detectPlatform(url: string): string | null {
   }
 }
 
+function extractSpotifyTrackId(url: string): string | null {
+  const match = url.match(/\/track\/([a-zA-Z0-9]+)/);
+  return match?.[1] ?? null;
+}
+
 // --- Extract song info from source URL ---
 
 async function extractFromSpotify(url: string): Promise<SongInfo> {
+  const trackId = extractSpotifyTrackId(url);
+
+  // Try Spotify API first for rich metadata + ISRC
+  if (trackId) {
+    try {
+      const token = await getSpotifyToken();
+      const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}?market=US`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const track = await res.json();
+        return {
+          title: track.name ?? "Unknown",
+          artist: (track.artists ?? []).map((a: { name: string }) => a.name).join(", "),
+          thumbnail: track.album?.images?.[0]?.url ?? "",
+          source: "spotify",
+          isrc: track.external_ids?.isrc ?? undefined,
+        };
+      }
+    } catch {
+      // fall through to oEmbed
+    }
+  }
+
+  // Fallback: oEmbed + OG scrape
   const oembedUrl = `https://open.spotify.com/oembed?url=${encodeURIComponent(url)}`;
   const oembedRes = await fetch(oembedUrl);
   if (!oembedRes.ok) throw new Error("Could not fetch song info from Spotify.");
@@ -113,6 +144,9 @@ async function extractFromYouTube(url: string): Promise<SongInfo> {
 }
 
 async function extractFromAppleMusic(url: string): Promise<SongInfo> {
+  // Try to extract track ID from URL for ISRC lookup later
+  const trackIdMatch = url.match(/[?&]i=(\d+)/) ?? url.match(/\/song\/[^/]+\/(\d+)/);
+
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
   });
@@ -130,48 +164,94 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
   const artistFromDesc = descText.match(/(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
   const artist = artistFromDesc?.[1] ?? descText.split("·")[0]?.trim() ?? "";
 
-  return { title, artist, thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "", source: "apple" };
+  return {
+    title,
+    artist,
+    thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "",
+    source: "apple",
+    isrc: trackIdMatch?.[1] ? undefined : undefined, // no ISRC from Apple Music pages
+  };
 }
 
 // --- Find direct links on each platform ---
 
-async function findSpotifyLink(query: string): Promise<string> {
+async function findSpotifyLink(title: string, artist: string): Promise<string> {
+  const query = [title, artist].filter(Boolean).join(" ").trim();
   try {
     const token = await getSpotifyToken();
-    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1&market=US`;
+    // Use field filters for better precision
+    const primaryArtist = artist.split(",")[0].trim();
+    const q = primaryArtist
+      ? `track:${title} artist:${primaryArtist}`
+      : title;
+    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=5&market=US`;
     const res = await fetch(searchUrl, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
       const data = await res.json();
-      const track = data.tracks?.items?.[0];
-      if (track?.external_urls?.spotify) {
-        return track.external_urls.spotify;
+      const items = data.tracks?.items ?? [];
+      // Prefer exact title match
+      const titleLower = title.toLowerCase();
+      const exact = items.find(
+        (t: { name: string }) => t.name.toLowerCase() === titleLower
+      );
+      const best = exact ?? items[0];
+      if (best?.external_urls?.spotify) {
+        return best.external_urls.spotify;
       }
     }
   } catch {
-    // fall through to search URL
+    // fall through
   }
   return `https://open.spotify.com/search/${encodeURIComponent(query)}`;
 }
 
-async function findAppleMusicLink(query: string): Promise<string> {
+async function findAppleMusicLink(title: string, artist: string, isrc?: string): Promise<string> {
+  const query = [title, artist].filter(Boolean).join(" ").trim();
+
+  // Strategy 1: Search by ISRC if available (most precise, finds pre-releases)
+  if (isrc) {
+    try {
+      const isrcUrl = `https://itunes.apple.com/lookup?isrc=${isrc}&entity=song&country=US`;
+      const res = await fetch(isrcUrl);
+      if (res.ok) {
+        const data = await res.json();
+        const song = data.results?.find((r: { kind?: string }) => r.kind === "song");
+        if (song?.trackViewUrl) {
+          return song.trackViewUrl.replace(/\?uo=\d+$/, "");
+        }
+      }
+    } catch {
+      // fall through to text search
+    }
+  }
+
+  // Strategy 2: Text search with title match filtering
   try {
-    const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`;
+    const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10`;
     const res = await fetch(searchUrl);
     if (res.ok) {
       const data = await res.json();
-      if (data.resultCount > 0 && data.results[0].trackViewUrl) {
-        return data.results[0].trackViewUrl.replace(/\?uo=\d+$/, "");
+      const results = data.results ?? [];
+      const titleLower = title.toLowerCase();
+      const exact = results.find(
+        (r: { trackName?: string }) => r.trackName?.toLowerCase() === titleLower
+      );
+      const best = exact ?? results[0];
+      if (best?.trackViewUrl) {
+        return best.trackViewUrl.replace(/\?uo=\d+$/, "");
       }
     }
   } catch {
-    // fall through to search URL
+    // fall through
   }
+
   return `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`;
 }
 
-async function findYouTubeLink(query: string): Promise<string> {
+async function findYouTubeLink(title: string, artist: string): Promise<string> {
+  const query = [title, artist].filter(Boolean).join(" ").trim();
   try {
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (apiKey) {
@@ -186,7 +266,7 @@ async function findYouTubeLink(query: string): Promise<string> {
       }
     }
   } catch {
-    // fall through to search URL
+    // fall through
   }
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
@@ -194,20 +274,24 @@ async function findYouTubeLink(query: string): Promise<string> {
 // --- Build links for the other two platforms ---
 
 async function buildLinks(info: SongInfo): Promise<PlatformLink[]> {
-  const query = [info.title, info.artist].filter(Boolean).join(" ").trim();
-
   const promises: Promise<PlatformLink>[] = [];
 
   if (info.source !== "spotify") {
-    promises.push(findSpotifyLink(query).then((url) => ({ platform: "Spotify", url })));
+    promises.push(
+      findSpotifyLink(info.title, info.artist).then((url) => ({ platform: "Spotify", url }))
+    );
   }
 
   if (info.source !== "apple") {
-    promises.push(findAppleMusicLink(query).then((url) => ({ platform: "Apple Music", url })));
+    promises.push(
+      findAppleMusicLink(info.title, info.artist, info.isrc).then((url) => ({ platform: "Apple Music", url }))
+    );
   }
 
   if (info.source !== "youtube") {
-    promises.push(findYouTubeLink(query).then((url) => ({ platform: "YouTube", url })));
+    promises.push(
+      findYouTubeLink(info.title, info.artist).then((url) => ({ platform: "YouTube", url }))
+    );
   }
 
   return Promise.all(promises);
