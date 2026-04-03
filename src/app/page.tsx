@@ -127,34 +127,46 @@ export default function Home() {
           Paste a Spotify, Apple Music, or YouTube link.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-3 mb-8">
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://open.spotify.com/track/..."
-            className="w-full h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
-            required
-          />
-          <div className="flex gap-2">
-            {["Matty", "Dommy", "Kelsey", "Nicky"].map((n) => (
-              <button
-                key={n}
-                type={name === n ? "submit" : "button"}
-                disabled={loading}
-                onClick={() => {
-                  setName(n);
-                  localStorage.setItem("song-converter-name", n);
-                }}
-                className={`flex-1 h-10 rounded-md text-sm font-medium cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  name === n
-                    ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300"
-                    : "border border-zinc-300 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-500 dark:hover:border-zinc-500"
-                }`}
-              >
-                {loading && name === n ? "..." : n}
-              </button>
-            ))}
+        <form onSubmit={handleSubmit} className="mb-8">
+          <div className="flex flex-col md:flex-row gap-3">
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://open.spotify.com/track/..."
+              className="flex-1 h-10 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
+              required
+            />
+            <div className="flex gap-2 justify-center md:justify-start">
+              {[
+                { name: "Matty", img: "/matty.png" },
+                { name: "Dommy", img: "/dommy.png" },
+                { name: "Kelsey", img: "/kelsey.png" },
+                { name: "Nicky", img: "/nicky.png" },
+              ].map((person) => (
+                <button
+                  key={person.name}
+                  type={name === person.name ? "submit" : "button"}
+                  disabled={loading}
+                  onClick={() => {
+                    setName(person.name);
+                    localStorage.setItem("song-converter-name", person.name);
+                  }}
+                  title={person.name}
+                  className={`w-10 h-10 rounded-full overflow-hidden cursor-pointer transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${
+                    name === person.name
+                      ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110"
+                      : "opacity-50 hover:opacity-80"
+                  }`}
+                >
+                  <img
+                    src={person.img}
+                    alt={person.name}
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
           </div>
         </form>
 
