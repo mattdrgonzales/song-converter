@@ -219,9 +219,9 @@ export default function Home() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <span className="text-[10px] text-zinc-400">
-                    {loading ? "..." : "Convert"}
-                  </span>
+                  {loading && (
+                    <span className="text-[10px] text-zinc-400">...</span>
+                  )}
                 </button>
                 <button
                   type="button"
