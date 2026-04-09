@@ -308,6 +308,18 @@ async function logConversion(
     sourcePlatform === "soundcloud" ? "SoundCloud" : "YouTube";
   const now = new Date().toISOString();
 
+  // Ensure input_url is always stored in the correct platform column
+  const platformFieldMap: Record<string, string> = {
+    spotify: "spotify_link",
+    apple: "apple_music_link",
+    youtube: "youtube_link",
+    soundcloud: "soundcloud_link",
+  };
+  const sourceField = platformFieldMap[sourcePlatform];
+  if (sourceField) {
+    linkMap[platformLabel] = linkMap[platformLabel] || inputUrl;
+  }
+
   // Check if this song already has a record (match on song_title + artist)
   const filterFormula = `AND({song_title}="${info.title.replace(/"/g, '\\"')}",{artist}="${info.artist.replace(/"/g, '\\"')}")`;
   const searchUrl = `${tableUrl}?filterByFormula=${encodeURIComponent(filterFormula)}&maxRecords=1`;
