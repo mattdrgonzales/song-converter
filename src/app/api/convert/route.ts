@@ -29,12 +29,7 @@ interface ConvertResult {
 
 // --- Spotify Auth (Client Credentials) ---
 
-let spotifyToken: string | null = null;
-let spotifyTokenExpiry = 0;
-
 async function getSpotifyToken(): Promise<string> {
-  if (spotifyToken && Date.now() < spotifyTokenExpiry) return spotifyToken;
-
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error("Spotify credentials not configured.");
@@ -50,8 +45,6 @@ async function getSpotifyToken(): Promise<string> {
 
   if (!res.ok) throw new Error("Failed to authenticate with Spotify.");
   const data = await res.json();
-  spotifyToken = data.access_token;
-  spotifyTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
   return data.access_token;
 }
 
@@ -380,12 +373,10 @@ interface AllLinks {
 }
 
 async function findAllLinks(info: SongInfo, inputUrl: string): Promise<AllLinks> {
-  // SoundCloud content is typically DJ sets / niche — don't cross-search for it
-  // and don't try to find SoundCloud matches from other platforms
   const [spotify, apple, youtube] = await Promise.all([
     info.source === "spotify"
       ? Promise.resolve(inputUrl)
-      : info.source === "soundcloud" ? findSpotifyLink(info.title, info.artist) : findSpotifyLink(info.title, info.artist),
+      : findSpotifyLink(info.title, info.artist),
     info.source === "apple"
       ? Promise.resolve(inputUrl)
       : findAppleMusicLink(info.title, info.artist, info.isrc),

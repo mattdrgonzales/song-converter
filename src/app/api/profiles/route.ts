@@ -19,7 +19,6 @@ export async function GET(): Promise<Response> {
     const url = `https://api.airtable.com/v0/${baseId}/Profiles?fields%5B%5D=name&fields%5B%5D=image_base64&sort%5B0%5D%5Bfield%5D=created_at&sort%5B0%5D%5Bdirection%5D=asc`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 0 },
     });
 
     if (!res.ok) return Response.json({ profiles: [] });
@@ -32,7 +31,9 @@ export async function GET(): Promise<Response> {
         img: r.fields.image_base64,
       }));
 
-    return Response.json({ profiles });
+    return Response.json({ profiles }, {
+      headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+    });
   } catch {
     return Response.json({ profiles: [] });
   }

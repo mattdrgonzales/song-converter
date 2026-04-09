@@ -65,7 +65,6 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
-      next: { revalidate: 0 },
     });
 
     if (!res.ok) {
@@ -92,7 +91,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         cursor: data.offset ?? null,
         hasMore: !!data.offset,
       },
-      { headers: { "Cache-Control": "s-maxage=0, stale-while-revalidate" } }
+      { headers: { "Cache-Control": "public, s-maxage=5, stale-while-revalidate=30" } }
     );
   } catch {
     return Response.json({ songs: [], hasMore: false });
