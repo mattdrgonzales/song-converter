@@ -591,7 +591,7 @@ export default function Home() {
                     placeholder="Paste a Spotify, Apple Music, YouTube, or SoundCloud link"
                     autoComplete="off"
                     autoFocus
-                    className="w-full h-11 px-4 rounded-xl border border-zinc-700 bg-zinc-900/60 text-sm outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 transition-all placeholder:text-zinc-600"
+                    className="w-full h-11 px-4 rounded-xl border border-zinc-700 bg-zinc-900/60 text-base outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 transition-all placeholder:text-zinc-600"
                   />
                   <button
                     type="submit"
