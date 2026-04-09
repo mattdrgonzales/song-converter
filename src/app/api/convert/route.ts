@@ -363,6 +363,126 @@ async function logConversion(
   });
 }
 
+// --- Auto-add to shared playlists ---
+
+function extractSpotifyUri(url: string): string | null {
+  const match = url.match(/\/track\/([a-zA-Z0-9]+)/);
+  return match ? `spotify:track:${match[1]}` : null;
+}
+
+function extractYouTubeVideoId(url: string): string | null {
+  const match = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) ?? url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  return match?.[1] ?? null;
+}
+
+async function getSpotifyUserToken(): Promise<string | null> {
+  const refreshToken = process.env.SPOTIFY_REFRESH_TOKEN;
+  const clientId = process.env.SPOTIFY_CLIENT_ID;
+  const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+  if (!refreshToken || !clientId || !clientSecret) return null;
+
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+    },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.access_token ?? null;
+}
+
+async function addToSpotifyPlaylist(spotifyUrl: string): Promise<void> {
+  const playlistId = process.env.SPOTIFY_PLAYLIST_ID;
+  if (!playlistId || !spotifyUrl) return;
+
+  const uri = extractSpotifyUri(spotifyUrl);
+  if (!uri) return;
+
+  const token = await getSpotifyUserToken();
+  if (!token) return;
+
+  // Check if track is already in playlist (fetch all tracks, paginated)
+  const checkRes = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(track(uri))&limit=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (checkRes.ok) {
+    const checkData = await checkRes.json();
+    const existing = (checkData.items ?? []).some(
+      (item: { track: { uri: string } }) => item.track?.uri === uri
+    );
+    if (existing) return;
+  }
+
+  await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uris: [uri] }),
+  });
+}
+
+async function getYouTubeUserToken(): Promise<string | null> {
+  const refreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!refreshToken || !clientId || !clientSecret) return null;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.access_token ?? null;
+}
+
+async function addToYouTubePlaylist(youtubeUrl: string): Promise<void> {
+  const playlistId = process.env.YOUTUBE_PLAYLIST_ID;
+  if (!playlistId || !youtubeUrl) return;
+
+  const videoId = extractYouTubeVideoId(youtubeUrl);
+  if (!videoId) return;
+
+  const token = await getYouTubeUserToken();
+  if (!token) return;
+
+  // Check if video is already in playlist
+  const checkRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&videoId=${videoId}&maxResults=1`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (checkRes.ok) {
+    const checkData = await checkRes.json();
+    if ((checkData.items ?? []).length > 0) return;
+  }
+
+  await fetch("https://www.googleapis.com/youtube/v3/playlistItems?part=snippet", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      snippet: {
+        playlistId,
+        resourceId: { kind: "youtube#video", videoId },
+      },
+    }),
+  });
+}
+
 // --- Build links for all platforms ---
 
 interface AllLinks {
@@ -453,7 +573,13 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
     { platform: "YouTube", url: all.youtube },
     { platform: "SoundCloud", url: all.soundcloud },
   ];
-  after(() => logConversion(url, platform, info, allLinks, submittedBy));
+  after(async () => {
+    await logConversion(url, platform, info, allLinks, submittedBy);
+    await Promise.allSettled([
+      addToSpotifyPlaylist(all.spotify),
+      addToYouTubePlaylist(all.youtube),
+    ]);
+  });
 
   return Response.json({
     success: true,
