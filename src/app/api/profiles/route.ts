@@ -59,6 +59,14 @@ export async function POST(request: NextRequest): Promise<Response> {
       return Response.json({ success: false, error: "Invalid image." }, { status: 400 });
     }
 
+    const MAX_IMAGE_BYTES = 50 * 1024; // 50 KB
+    if (imageBase64.length > MAX_IMAGE_BYTES) {
+      return Response.json(
+        { success: false, error: "Image must be under 50 KB." },
+        { status: 400 },
+      );
+    }
+
     // Check for duplicate name
     const checkUrl = `https://api.airtable.com/v0/${baseId}/Profiles?filterByFormula=${encodeURIComponent(`{name}="${name.replace(/"/g, '\\"')}"`)}&maxRecords=1`;
     const checkRes = await fetch(checkUrl, {

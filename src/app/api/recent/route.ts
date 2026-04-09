@@ -27,7 +27,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const submitter = request.nextUrl.searchParams.get("submitter") ?? "";
   const platform = request.nextUrl.searchParams.get("platform") ?? "";
   const since = request.nextUrl.searchParams.get("since") ?? "";
-  const pageSize = 5;
+  const pageSize = 25;
 
   // Build Airtable filter formula
   const filters: string[] = [];
