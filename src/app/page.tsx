@@ -91,7 +91,6 @@ function isLongformTitle(song: RecentSong): boolean {
 
 function SourceTag({ song }: { song: RecentSong }) {
   if (!isLongformTitle(song)) return null;
-  if (song.youtube_link) return <span className="inline-flex items-center text-[8px] font-bold uppercase tracking-wide px-1 py-px rounded bg-red-500/10 text-red-400 mr-1.5">YT</span>;
   if (song.soundcloud_link) return <span className="inline-flex items-center text-[8px] font-bold uppercase tracking-wide px-1 py-px rounded bg-orange-500/10 text-orange-400 mr-1.5">SC</span>;
   return null;
 }
