@@ -495,7 +495,12 @@ export default function Home() {
                       </div>
 
                       {/* Mobile row */}
-                      <div className="md:hidden grid grid-cols-[1fr_auto] gap-x-2.5 items-center px-3 py-2.5 border-b border-zinc-800/20 hover:bg-zinc-800/10 transition-colors">
+                      <div className="md:hidden grid grid-cols-[24px_1fr_auto] gap-x-2.5 items-center px-3 py-2.5 border-b border-zinc-800/20 hover:bg-zinc-800/10 transition-colors">
+                        {s.submitted_by && avatarMap[s.submitted_by] ? (
+                          <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} className="w-5 h-5 rounded-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-zinc-800/60" />
+                        )}
                         <div className="min-w-0">
                           {longform ? (
                             <p className="text-[13px] text-zinc-400 truncate"><SourceTag song={s} />{s.song_title}</p>
