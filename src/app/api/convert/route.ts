@@ -418,7 +418,7 @@ async function addToSpotifyPlaylist(spotifyUrl: string): Promise<void> {
 
   // Check if track is already in playlist (fetch all tracks, paginated)
   const checkRes = await fetch(
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?fields=items(track(uri))&limit=100`,
+    `https://api.spotify.com/v1/playlists/${playlistId}/items?fields=items(track(uri))&limit=100`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (checkRes.ok) {
@@ -429,7 +429,7 @@ async function addToSpotifyPlaylist(spotifyUrl: string): Promise<void> {
     if (existing) return;
   }
 
-  await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+  await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/items`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
