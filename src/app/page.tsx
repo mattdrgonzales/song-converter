@@ -110,15 +110,18 @@ async function getCroppedImg(imageSrc: string, crop: Area): Promise<string> {
   const image = new Image();
   image.crossOrigin = "anonymous";
   await new Promise<void>((resolve) => { image.onload = () => resolve(); image.src = imageSrc; });
+  const size = 256;
   const canvas = document.createElement("canvas");
-  canvas.width = 96;
-  canvas.height = 96;
+  canvas.width = size;
+  canvas.height = size;
   const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.beginPath();
-  ctx.arc(48, 48, 48, 0, Math.PI * 2);
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
   ctx.clip();
-  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, 96, 96);
-  return canvas.toDataURL("image/png");
+  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.85);
 }
 
 // --- Add Profile Modal ---
