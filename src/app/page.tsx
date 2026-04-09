@@ -39,6 +39,7 @@ const AVATARS: Record<string, string> = {
   Nicky: "/nicky.png",
   Ninna: "/ninna.png",
   Marissa: "/marissa.png",
+  Jeff: "/jeff.png",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -109,6 +110,7 @@ const PEOPLE = [
   { name: "Nicky", img: "/nicky.png" },
   { name: "Ninna", img: "/ninna.png" },
   { name: "Marissa", img: "/marissa.png" },
+  { name: "Jeff", img: "/jeff.png" },
 ];
 
 export default function Home() {
