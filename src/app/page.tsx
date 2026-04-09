@@ -25,6 +25,7 @@ interface RecentSong {
   apple_music_link: string;
   youtube_link: string;
   submitted_by: string;
+  last_searched: string;
 }
 
 interface PersonData {
@@ -49,12 +50,31 @@ const PLATFORM_COLORS: Record<string, string> = {
   YouTube: "#FF0000",
 };
 
+const DATE_PRESETS = [
+  { label: "Today", days: 0 },
+  { label: "Yesterday", days: 1 },
+  { label: "This week", days: 7 },
+  { label: "30 days", days: 30 },
+];
+
 function PlatformIcon({ platform, className }: { platform: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className ?? "w-5 h-5 shrink-0"} fill={PLATFORM_COLORS[platform] ?? "currentColor"}>
+    <svg viewBox="0 0 24 24" className={className ?? "w-4 h-4 shrink-0"} fill={PLATFORM_COLORS[platform] ?? "currentColor"}>
       <path d={PLATFORM_ICONS[platform] ?? ""} />
     </svg>
   );
+}
+
+function formatDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // --- Crop helper ---
@@ -134,10 +154,7 @@ function AddProfileModal({ onClose, onCreated }: { onClose: () => void; onCreate
         body: JSON.stringify({ name: formattedName, image: croppedImage }),
       });
       const data = await res.json();
-      if (!data.success) {
-        setError(data.error);
-        return;
-      }
+      if (!data.success) { setError(data.error); return; }
       onCreated(data.profile);
     } catch {
       setError("Failed to save. Try again.");
@@ -158,11 +175,7 @@ function AddProfileModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div className="space-y-3">
             <p className="text-xs text-zinc-400">Upload a photo to use as your avatar.</p>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="w-full h-10 rounded-lg border border-zinc-700 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 cursor-pointer transition-colors"
-            >
+            <button type="button" onClick={() => fileRef.current?.click()} className="w-full h-10 rounded-lg border border-zinc-700 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 cursor-pointer transition-colors">
               Choose Photo
             </button>
           </div>
@@ -171,24 +184,10 @@ function AddProfileModal({ onClose, onCreated }: { onClose: () => void; onCreate
         {step === "crop" && (
           <div className="space-y-3">
             <div className="relative w-full h-64 rounded-lg overflow-hidden bg-black">
-              <Cropper
-                image={imageSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                cropShape="round"
-                showGrid={false}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
-              />
+              <Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} />
             </div>
             <input type="range" min={1} max={3} step={0.1} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} className="w-full" />
-            <button
-              type="button"
-              onClick={handleCropDone}
-              className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors"
-            >
+            <button type="button" onClick={handleCropDone} className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors">
               Crop
             </button>
           </div>
@@ -199,22 +198,9 @@ function AddProfileModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <div className="flex justify-center">
               <img src={croppedImage} alt="Preview" className="w-16 h-16 rounded-full" />
             </div>
-            <input
-              type="text"
-              value={profileName}
-              onChange={(e) => setProfileName(e.target.value)}
-              placeholder="Your name"
-              maxLength={20}
-              className="w-full h-10 px-3 rounded-lg border border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-100 transition-shadow"
-              autoFocus
-            />
+            <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} placeholder="Your name" maxLength={20} className="w-full h-10 px-3 rounded-lg border border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-100 transition-shadow" autoFocus />
             {error && <p className="text-xs text-red-400">{error}</p>}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !profileName.trim()}
-              className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button type="button" onClick={handleSave} disabled={saving || !profileName.trim()} className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? "Saving..." : "Save Profile"}
             </button>
           </div>
@@ -265,39 +251,20 @@ function AddSongDrawer({ name, onClose, onAdded }: { name: string; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="bg-zinc-900 rounded-t-2xl md:rounded-xl w-full max-w-md p-5 space-y-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bg-zinc-900 rounded-t-2xl md:rounded-xl w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Add a Song</h3>
           <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300 cursor-pointer text-lg leading-none">&times;</button>
         </div>
-
         <form onSubmit={handleSubmit}>
           <div className="flex gap-2">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste a Spotify, Apple Music, or YouTube link"
-              autoComplete="off"
-              autoFocus
-              className="flex-1 h-10 px-3 rounded-lg border border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-100 transition-shadow"
-              required
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-10 px-4 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-            >
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Paste a Spotify, Apple Music, or YouTube link" autoComplete="off" autoFocus className="flex-1 h-10 px-3 rounded-lg border border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-100 transition-shadow" required />
+            <button type="submit" disabled={loading} className="h-10 px-4 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
               {loading ? "..." : "Add"}
             </button>
           </div>
         </form>
-
         {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
-
         {result && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
@@ -346,20 +313,48 @@ export default function Home() {
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [showAddSong, setShowAddSong] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [filterSubmitter, setFilterSubmitter] = useState("");
+  const [filterPlatform, setFilterPlatform] = useState("");
+  const [filterDays, setFilterDays] = useState<number | null>(null);
 
   const avatarMap: Record<string, string> = {};
   for (const p of profiles) avatarMap[p.name] = p.img;
   const activeProfile = profiles.find((p) => p.name === name);
+  const hasFilters = filterSubmitter || filterPlatform || filterDays !== null;
 
-  async function fetchRecent(cursor?: string | null, append = false) {
+  function getSinceDate(days: number | null): string {
+    if (days === null) return "";
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  async function fetchRecent(cursor?: string | null, append = false, submitter?: string, platform?: string, days?: number | null) {
     const params = new URLSearchParams();
     if (cursor) params.set("cursor", cursor);
+    const sub = submitter ?? filterSubmitter;
+    const plat = platform ?? filterPlatform;
+    const d = days !== undefined ? days : filterDays;
+    if (sub) params.set("submitter", sub);
+    if (plat) params.set("platform", plat);
+    const since = getSinceDate(d);
+    if (since) params.set("since", since);
     const qs = params.toString() ? `?${params.toString()}` : "";
     const res = await fetch(`/api/recent${qs}`);
     const data = await res.json();
     setRecent((prev) => append ? [...(prev ?? []), ...(data.songs ?? [])] : data.songs ?? []);
     setRecentCursor(data.cursor ?? null);
     setHasMore(data.hasMore ?? false);
+  }
+
+  function applyFilter(submitter: string, platform: string, days?: number | null) {
+    const d = days !== undefined ? days : filterDays;
+    setFilterSubmitter(submitter);
+    setFilterPlatform(platform);
+    if (days !== undefined) setFilterDays(days);
+    setRecent(null);
+    fetchRecent(null, false, submitter, platform, d).catch(() => setRecent([]));
   }
 
   useEffect(() => {
@@ -386,26 +381,17 @@ export default function Home() {
 
       {/* Header bar */}
       <header className="sticky top-0 z-40 backdrop-blur-md bg-zinc-950/80 border-b border-zinc-800/50">
-        <div className="max-w-3xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
           <h1 className="text-sm font-semibold tracking-tight">Share Your Music Here</h1>
 
           <div className="flex items-center gap-3">
-            {/* Add song button */}
-            <button
-              type="button"
-              onClick={() => setShowAddSong(true)}
-              className="h-8 px-3 rounded-lg bg-white text-black text-xs font-medium cursor-pointer hover:bg-zinc-200 transition-colors"
-            >
+            <button type="button" onClick={() => setShowAddSong(true)} className="h-8 px-3 rounded-lg bg-white text-black text-xs font-medium cursor-pointer hover:bg-zinc-200 transition-colors">
               + Add Song
             </button>
 
             {/* Profile selector */}
             <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-zinc-800/60 transition-colors"
-              >
+              <button type="button" onClick={() => setShowProfileMenu(!showProfileMenu)} className="flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-zinc-800/60 transition-colors">
                 {activeProfile ? (
                   <img src={activeProfile.img} alt={activeProfile.name} className="w-7 h-7 rounded-full object-cover" />
                 ) : (
@@ -420,21 +406,14 @@ export default function Home() {
                 </svg>
               </button>
 
-              {/* Profile dropdown */}
               {showProfileMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowProfileMenu(false)} />
                   <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-xl overflow-hidden">
                     <div className="py-1">
                       {profiles.map((p) => (
-                        <button
-                          key={p.name}
-                          type="button"
-                          onClick={() => selectProfile(p.name)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer transition-colors ${
-                            name === p.name ? "bg-zinc-800/80" : "hover:bg-zinc-800/40"
-                          }`}
-                        >
+                        <button key={p.name} type="button" onClick={() => selectProfile(p.name)}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-left cursor-pointer transition-colors ${name === p.name ? "bg-zinc-800/80" : "hover:bg-zinc-800/40"}`}>
                           <img src={p.img} alt={p.name} className="w-6 h-6 rounded-full object-cover shrink-0" />
                           <span className="text-xs font-medium truncate">{p.name}</span>
                           {name === p.name && (
@@ -446,11 +425,7 @@ export default function Home() {
                       ))}
                     </div>
                     <div className="border-t border-zinc-800">
-                      <button
-                        type="button"
-                        onClick={() => { setShowProfileMenu(false); setShowAddProfile(true); }}
-                        className="w-full px-3 py-2.5 text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 cursor-pointer transition-colors"
-                      >
+                      <button type="button" onClick={() => { setShowProfileMenu(false); setShowAddProfile(true); }} className="w-full px-3 py-2.5 text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 cursor-pointer transition-colors">
                         + New profile
                       </button>
                     </div>
@@ -463,76 +438,133 @@ export default function Home() {
       </header>
 
       {/* Song table */}
-      <div className="flex-1 max-w-3xl mx-auto w-full px-4 md:px-6 py-6">
+      <div className="flex-1 max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          <select
+            value={filterSubmitter}
+            onChange={(e) => applyFilter(e.target.value, filterPlatform)}
+            className="h-8 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors"
+          >
+            <option value="">All people</option>
+            {profiles.map((p) => (
+              <option key={p.name} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={filterPlatform}
+            onChange={(e) => applyFilter(filterSubmitter, e.target.value)}
+            className="h-8 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors"
+          >
+            <option value="">All platforms</option>
+            <option value="spotify">Spotify</option>
+            <option value="apple">Apple Music</option>
+            <option value="youtube">YouTube</option>
+          </select>
+
+          <div className="flex gap-1">
+            {DATE_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
+                className={`text-[10px] px-2 py-1 rounded-md cursor-pointer transition-all border ${
+                  filterDays === preset.days
+                    ? "border-zinc-500 text-zinc-200 bg-zinc-800"
+                    : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
+          {hasFilters && (
+            <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors ml-1">
+              Clear
+            </button>
+          )}
+        </div>
+
         {recent === null ? (
-          <div className="space-y-3 pt-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="h-10 rounded-lg bg-zinc-800/30 animate-pulse" />
+          <div className="space-y-1">
+            {[...Array(10)].map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-zinc-800/20 animate-pulse" />
             ))}
           </div>
         ) : recent.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-sm text-zinc-500 mb-4">No songs shared yet.</p>
-            <button
-              type="button"
-              onClick={() => setShowAddSong(true)}
-              className="h-9 px-4 rounded-lg bg-white text-black text-xs font-medium cursor-pointer hover:bg-zinc-200 transition-colors"
-            >
-              Share the first one
-            </button>
+            <p className="text-sm text-zinc-500 mb-4">{hasFilters ? "No results for this filter." : "No songs shared yet."}</p>
+            {!hasFilters && (
+              <button type="button" onClick={() => setShowAddSong(true)} className="h-9 px-4 rounded-lg bg-white text-black text-xs font-medium cursor-pointer hover:bg-zinc-200 transition-colors">
+                Share the first one
+              </button>
+            )}
           </div>
         ) : (
           <>
-            {/* Table header */}
-            <div className="hidden md:grid grid-cols-[1fr_1fr_auto] gap-4 px-3 pb-2 border-b border-zinc-800/50">
+            {/* Table header — desktop only */}
+            <div className="hidden md:grid grid-cols-[2fr_minmax(120px,1fr)_100px] gap-4 px-4 pb-2 border-b border-zinc-800/40">
               <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Song</span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Artist</span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600 w-28 text-right">Links</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Shared by</span>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600 text-right">Listen</span>
             </div>
 
             {/* Song rows */}
-            <div className="divide-y divide-zinc-800/30">
-              {recent.map((s, i) => {
-                const hasSpotify = !!s.spotify_link;
-                const hasApple = !!s.apple_music_link;
-                const hasYouTube = !!s.youtube_link;
-
-                return (
-                  <div key={`${s.song_title}-${i}`} className="group flex items-center gap-3 py-3 px-3 rounded-lg hover:bg-zinc-800/20 transition-colors -mx-3">
-                    {/* Avatar */}
+            <div>
+              {recent.map((s, i) => (
+                <div
+                  key={`${s.song_title}-${i}`}
+                  className="group grid grid-cols-[1fr_auto] md:grid-cols-[2fr_minmax(120px,1fr)_100px] gap-4 items-center px-4 py-3 border-b border-zinc-800/20 hover:bg-zinc-800/10 transition-colors"
+                >
+                  {/* Song + avatar */}
+                  <div className="flex items-center gap-3 min-w-0">
                     {s.submitted_by && avatarMap[s.submitted_by] ? (
                       <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} title={s.submitted_by} className="w-8 h-8 rounded-full object-cover shrink-0" loading="lazy" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-zinc-800/60 shrink-0" title={s.submitted_by || "Unknown"} />
+                      <div className="w-8 h-8 rounded-full bg-zinc-800/60 shrink-0" />
                     )}
-
-                    {/* Song info — stacked on mobile, grid on desktop */}
-                    <div className="flex-1 min-w-0 md:grid md:grid-cols-[1fr_1fr] md:gap-4 md:items-center">
-                      <p className="text-sm font-medium truncate">{s.song_title}</p>
-                      <p className="text-xs text-zinc-400 truncate">{s.artist}</p>
-                    </div>
-
-                    {/* Platform links */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {hasSpotify && (
-                        <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 rounded-md hover:bg-zinc-700/40 transition-colors">
-                          <PlatformIcon platform="Spotify" className="w-4.5 h-4.5" />
-                        </a>
-                      )}
-                      {hasApple && (
-                        <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music" className="p-1.5 rounded-md hover:bg-zinc-700/40 transition-colors">
-                          <PlatformIcon platform="Apple Music" className="w-4.5 h-4.5" />
-                        </a>
-                      )}
-                      {hasYouTube && (
-                        <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube" className="p-1.5 rounded-md hover:bg-zinc-700/40 transition-colors">
-                          <PlatformIcon platform="YouTube" className="w-4.5 h-4.5" />
-                        </a>
-                      )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {s.song_title}
+                        <span className="font-normal text-zinc-500"> by {s.artist}</span>
+                      </p>
+                      {/* Mobile: shared by + date inline */}
+                      <p className="md:hidden text-[11px] text-zinc-600 truncate">
+                        {s.submitted_by || "Someone"}{s.last_searched ? ` · ${formatDate(s.last_searched)}` : ""}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
+
+                  {/* Shared by — desktop */}
+                  <p className="hidden md:block text-xs text-zinc-500 truncate">
+                    {s.submitted_by || "—"}
+                    {s.last_searched && (
+                      <span className="text-zinc-600"> · {formatDate(s.last_searched)}</span>
+                    )}
+                  </p>
+
+                  {/* Platform links — always show all available */}
+                  <div className="flex items-center justify-end gap-3 shrink-0">
+                    {s.spotify_link && (
+                      <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="opacity-70 hover:opacity-100 transition-opacity">
+                        <PlatformIcon platform="Spotify" className="w-[18px] h-[18px]" />
+                      </a>
+                    )}
+                    {s.apple_music_link && (
+                      <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music" className="opacity-70 hover:opacity-100 transition-opacity">
+                        <PlatformIcon platform="Apple Music" className="w-[18px] h-[18px]" />
+                      </a>
+                    )}
+                    {s.youtube_link && (
+                      <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube" className="opacity-70 hover:opacity-100 transition-opacity">
+                        <PlatformIcon platform="YouTube" className="w-[18px] h-[18px]" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Load more */}
@@ -552,11 +584,7 @@ export default function Home() {
 
       {/* Modals */}
       {showAddSong && (
-        <AddSongDrawer
-          name={name}
-          onClose={() => setShowAddSong(false)}
-          onAdded={() => fetchRecent().catch(() => {})}
-        />
+        <AddSongDrawer name={name} onClose={() => setShowAddSong(false)} onAdded={() => fetchRecent().catch(() => {})} />
       )}
       {showAddProfile && <AddProfileModal onClose={() => setShowAddProfile(false)} onCreated={handleProfileCreated} />}
     </main>

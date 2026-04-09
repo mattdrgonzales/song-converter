@@ -9,6 +9,7 @@ interface RecentSong {
   apple_music_link: string;
   youtube_link: string;
   submitted_by: string;
+  last_searched: string;
 }
 
 function decodeEntities(s: string): string {
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   try {
-    let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by`;
+    let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by&fields%5B%5D=last_searched`;
 
     if (filters.length > 0) {
       const formula = filters.length === 1
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         apple_music_link: r.fields.apple_music_link ?? "",
         youtube_link: r.fields.youtube_link ?? "",
         submitted_by: r.fields.submitted_by ?? "",
+        last_searched: r.fields.last_searched ?? "",
       })
     );
 
