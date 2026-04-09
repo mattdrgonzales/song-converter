@@ -435,7 +435,7 @@ async function addToSpotifyPlaylist(spotifyUrl: string): Promise<void> {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ uris: [uri] }),
+    body: JSON.stringify({ uris: [uri], position: 0 }),
   });
 }
 
@@ -489,6 +489,7 @@ async function addToYouTubePlaylist(youtubeUrl: string): Promise<void> {
     body: JSON.stringify({
       snippet: {
         playlistId,
+        position: 0,
         resourceId: { kind: "youtube#video", videoId },
       },
     }),
