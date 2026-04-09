@@ -70,6 +70,25 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function isLongformTitle(song: RecentSong): boolean {
+  return !song.spotify_link && !song.apple_music_link;
+}
+
+function SourceTag({ song }: { song: RecentSong }) {
+  if (!isLongformTitle(song)) return null;
+  if (song.youtube_link) return (
+    <span className="inline-flex items-center text-[8.5px] font-bold tracking-wide uppercase px-1 py-px rounded bg-red-500/10 text-red-400 mr-1.5">YT</span>
+  );
+  if (song.soundcloud_link) return (
+    <span className="inline-flex items-center text-[8.5px] font-bold tracking-wide uppercase px-1 py-px rounded bg-orange-500/10 text-orange-400 mr-1.5">SC</span>
+  );
+  return null;
+}
+
+const FILTER_CHIP = "text-[10px] px-2 py-1 rounded-md cursor-pointer transition-all border whitespace-nowrap";
+const CHIP_ACTIVE = "border-zinc-500 text-zinc-200 bg-zinc-800";
+const CHIP_INACTIVE = "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600";
+
 // --- Crop helper ---
 
 const MAX_PROFILE_BYTES = 50 * 1024;
@@ -230,6 +249,10 @@ export default function Home() {
   const [filterSubmitter, setFilterSubmitter] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("");
   const [filterDays, setFilterDays] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"table" | "card">(() => {
+    if (typeof window !== "undefined") return (localStorage.getItem("song-view-mode") as "table" | "card") ?? "table";
+    return "table";
+  });
 
   const avatarMap = useMemo(() => Object.fromEntries(profiles.map((p) => [p.name, p.img])), [profiles]);
   const activeProfile = useMemo(() => profiles.find((p) => p.name === name), [profiles, name]);
@@ -274,6 +297,8 @@ export default function Home() {
     fetchRecent().catch(() => setRecent([]));
     fetch("/api/profiles").then((r) => r.json()).then((d) => setProfiles(d.profiles ?? [])).catch(() => {});
   }, []);
+
+  useEffect(() => { localStorage.setItem("song-view-mode", viewMode); }, [viewMode]);
 
   function selectProfile(n: string) {
     setName(n);
@@ -375,37 +400,52 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Song table */}
+      {/* Song list */}
       <div className="flex-1 max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2 mb-5">
-          <select value={filterSubmitter} onChange={(e) => applyFilter(e.target.value, filterPlatform)} className="h-8 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors">
-            <option value="">All people</option>
-            {profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
-          </select>
+        {/* Filter bar */}
+        <div className="flex items-center gap-1.5 mb-5 overflow-x-auto scrollbar-hide pb-1">
+          {/* People chips */}
+          <button type="button" onClick={() => applyFilter("", filterPlatform)} className={`${FILTER_CHIP} ${!filterSubmitter ? CHIP_ACTIVE : CHIP_INACTIVE}`}>Everyone</button>
+          {profiles.map((p) => (
+            <button key={p.name} type="button" onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)} className={`${FILTER_CHIP} ${filterSubmitter === p.name ? CHIP_ACTIVE : CHIP_INACTIVE}`}>{p.name}</button>
+          ))}
 
-          <select value={filterPlatform} onChange={(e) => applyFilter(filterSubmitter, e.target.value)} className="h-8 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors">
-            <option value="">All platforms</option>
-            <option value="spotify">Spotify</option>
-            <option value="apple">Apple Music</option>
-            <option value="youtube">YouTube</option>
-            <option value="soundcloud">SoundCloud</option>
-          </select>
+          <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
 
-          <div className="flex gap-1">
-            {DATE_PRESETS.map((preset) => (
-              <button key={preset.label} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
-                className={`text-[10px] px-2 py-1 rounded-md cursor-pointer transition-all border ${filterDays === preset.days ? "border-zinc-500 text-zinc-200 bg-zinc-800" : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"}`}>
-                {preset.label}
-              </button>
-            ))}
-          </div>
+          {/* Platform chips */}
+          <button type="button" onClick={() => applyFilter(filterSubmitter, "")} className={`${FILTER_CHIP} ${!filterPlatform ? CHIP_ACTIVE : CHIP_INACTIVE}`}>All</button>
+          {[{ val: "spotify", label: "Spotify" }, { val: "apple", label: "Apple" }, { val: "youtube", label: "YouTube" }, { val: "soundcloud", label: "SC" }].map(({ val, label }) => (
+            <button key={val} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform === val ? "" : val)} className={`${FILTER_CHIP} ${filterPlatform === val ? CHIP_ACTIVE : CHIP_INACTIVE}`}>{label}</button>
+          ))}
+
+          <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
+
+          {/* Date chips */}
+          {DATE_PRESETS.map((preset) => (
+            <button key={preset.label} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
+              className={`${FILTER_CHIP} ${filterDays === preset.days ? CHIP_ACTIVE : CHIP_INACTIVE}`}>
+              {preset.label}
+            </button>
+          ))}
 
           {hasFilters && (
-            <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors ml-1">
-              Clear
-            </button>
+            <>
+              <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
+              <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors whitespace-nowrap">
+                Clear
+              </button>
+            </>
           )}
+
+          {/* View toggle */}
+          <div className="flex items-center gap-0.5 ml-auto shrink-0 pl-2">
+            <button type="button" onClick={() => setViewMode("table")} className={`p-1 rounded cursor-pointer transition-colors ${viewMode === "table" ? "bg-zinc-800 text-zinc-200" : "text-zinc-600 hover:text-zinc-400"}`} title="Table view">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M1 3h14v1.5H1zm0 4h14v1.5H1zm0 4h14v1.5H1z" /></svg>
+            </button>
+            <button type="button" onClick={() => setViewMode("card")} className={`p-1 rounded cursor-pointer transition-colors ${viewMode === "card" ? "bg-zinc-800 text-zinc-200" : "text-zinc-600 hover:text-zinc-400"}`} title="Card view">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M1 1h6v6H1zm8 0h6v6H9zM1 9h6v6H1zm8 0h6v6H9z" /></svg>
+            </button>
+          </div>
         </div>
 
         {recent === null ? (
@@ -420,49 +460,114 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <div className="hidden md:grid grid-cols-[2fr_minmax(120px,1fr)_120px] gap-4 px-4 pb-2 border-b border-zinc-800/40">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Song</span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">Shared by</span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-600 text-right">Listen</span>
-            </div>
-
-            <div>
-              {recent.map((s, i) => (
-                <div key={`${s.song_title}-${s.artist}-${s.last_searched || i}`} className="group grid grid-cols-[1fr_auto] md:grid-cols-[2fr_minmax(120px,1fr)_120px] gap-4 items-center px-4 py-3 border-b border-zinc-800/20 hover:bg-zinc-800/10 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {s.submitted_by && avatarMap[s.submitted_by] ? (
-                      <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} title={s.submitted_by} className="w-8 h-8 rounded-full object-cover shrink-0" loading="lazy" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-zinc-800/60 shrink-0" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {s.song_title}
-                        <span className="font-normal text-zinc-500"> by {s.artist}</span>
-                      </p>
-                      <p className="md:hidden text-[11px] text-zinc-600 truncate">
-                        {s.submitted_by || "Someone"}{s.last_searched ? ` · ${formatDate(s.last_searched)}` : ""}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="hidden md:block text-xs text-zinc-500 truncate">
-                    {s.submitted_by || "—"}
-                    {s.last_searched && <span className="text-zinc-600"> · {formatDate(s.last_searched)}</span>}
-                  </p>
-
-                  <div className="flex items-center justify-end gap-3 shrink-0">
-                    {PLATFORM_KEYS.map(({ key, name: pName }) =>
-                      s[key] ? (
-                        <a key={pName} href={s[key] as string} target="_blank" rel="noopener noreferrer" title={pName} className="opacity-70 hover:opacity-100 transition-opacity">
-                          <PlatformIcon platform={pName} className="w-[18px] h-[18px]" />
-                        </a>
-                      ) : null
-                    )}
-                  </div>
+            {viewMode === "table" ? (
+              <>
+                {/* Table header — desktop only */}
+                <div className="hidden md:grid grid-cols-[32px_1fr_100px_88px] gap-3 px-3 pb-2 border-b border-zinc-800/40">
+                  <span />
+                  <span className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">Song</span>
+                  <span className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">Shared by</span>
+                  <span className="text-[9px] font-medium uppercase tracking-wider text-zinc-600 text-right">Listen</span>
                 </div>
-              ))}
-            </div>
+
+                <div>
+                  {recent.map((s, i) => {
+                    const longform = isLongformTitle(s);
+                    return (
+                      <div key={`${s.song_title}-${s.artist}-${s.last_searched || i}`} className="grid grid-cols-[28px_1fr_80px_70px] md:grid-cols-[32px_1fr_100px_88px] gap-3 items-center px-3 py-2 border-b border-zinc-800/20 hover:bg-zinc-800/10 transition-colors">
+                        {/* Avatar */}
+                        {s.submitted_by && avatarMap[s.submitted_by] ? (
+                          <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} title={s.submitted_by} className="w-7 h-7 md:w-8 md:h-8 rounded-full object-cover shrink-0" loading="lazy" />
+                        ) : (
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-zinc-800/60 shrink-0" />
+                        )}
+
+                        {/* Song info */}
+                        <div className="min-w-0">
+                          {longform ? (
+                            <p className="text-[13px] text-zinc-400 truncate">
+                              <SourceTag song={s} />
+                              {s.song_title}
+                            </p>
+                          ) : (
+                            <>
+                              <p className="text-[13px] font-medium text-white truncate">{s.song_title}</p>
+                              <p className="text-[11.5px] text-zinc-500 truncate">{s.artist}</p>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Shared by */}
+                        <div className="min-w-0">
+                          <p className="text-[12px] text-zinc-400 truncate">{s.submitted_by || "—"}</p>
+                          <p className="text-[10px] text-zinc-600 truncate">{formatDate(s.last_searched)}</p>
+                        </div>
+
+                        {/* Platform icons */}
+                        <div className="flex items-center justify-end gap-2 shrink-0">
+                          {PLATFORM_KEYS.map(({ key, name: pName }) =>
+                            s[key] ? (
+                              <a key={pName} href={s[key] as string} target="_blank" rel="noopener noreferrer" title={pName} className="opacity-45 hover:opacity-100 hover:scale-110 transition-all">
+                                <PlatformIcon platform={pName} className="w-[15px] h-[15px] md:w-4 md:h-4" />
+                              </a>
+                            ) : null
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              /* Card view */
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-zinc-800/10 rounded-lg overflow-hidden">
+                {recent.map((s, i) => {
+                  const longform = isLongformTitle(s);
+                  return (
+                    <div key={`${s.song_title}-${s.artist}-${s.last_searched || i}`} className="flex gap-3 px-3 py-[11px] bg-[#0a0a0a] hover:bg-zinc-800/10 transition-colors">
+                      {/* Avatar */}
+                      {s.submitted_by && avatarMap[s.submitted_by] ? (
+                        <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} title={s.submitted_by} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" loading="lazy" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-zinc-800/60 shrink-0 mt-0.5" />
+                      )}
+
+                      {/* Card body */}
+                      <div className="flex-1 min-w-0">
+                        {longform ? (
+                          <p className="text-[13px] text-zinc-400 line-clamp-2 leading-snug">
+                            <SourceTag song={s} />
+                            {s.song_title}
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-[13px] font-medium text-white truncate leading-snug">{s.song_title}</p>
+                            <p className="text-[11.5px] text-zinc-500 truncate">{s.artist}</p>
+                          </>
+                        )}
+
+                        {/* Footer */}
+                        <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-[11px] text-zinc-400 truncate">
+                            {s.submitted_by || "Someone"}
+                            {s.last_searched && <span className="text-zinc-600"> · {formatDate(s.last_searched)}</span>}
+                          </p>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {PLATFORM_KEYS.map(({ key, name: pName }) =>
+                              s[key] ? (
+                                <a key={pName} href={s[key] as string} target="_blank" rel="noopener noreferrer" title={pName} className="opacity-45 hover:opacity-100 hover:scale-110 transition-all">
+                                  <PlatformIcon platform={pName} className="w-[14px] h-[14px] md:w-[15px] md:h-[15px]" />
+                                </a>
+                              ) : null
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {hasMore && (
               <button type="button" disabled={loadingMore} onClick={async () => { setLoadingMore(true); await fetchRecent(recentCursor, true).catch(() => {}); setLoadingMore(false); }}
