@@ -131,14 +131,29 @@ export default function Home() {
   const [hasMore, setHasMore] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filterSubmitter, setFilterSubmitter] = useState("");
+  const [filterPlatform, setFilterPlatform] = useState("");
 
-  async function fetchRecent(cursor?: string | null, append = false) {
-    const params = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-    const res = await fetch(`/api/recent${params}`);
+  async function fetchRecent(cursor?: string | null, append = false, submitter?: string, platform?: string) {
+    const params = new URLSearchParams();
+    if (cursor) params.set("cursor", cursor);
+    const sub = submitter ?? filterSubmitter;
+    const plat = platform ?? filterPlatform;
+    if (sub) params.set("submitter", sub);
+    if (plat) params.set("platform", plat);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`/api/recent${qs}`);
     const d = await res.json();
     setRecent((prev) => append ? [...(prev ?? []), ...(d.songs ?? [])] : d.songs ?? []);
     setRecentCursor(d.cursor ?? null);
     setHasMore(d.hasMore ?? false);
+  }
+
+  function applyFilter(submitter: string, platform: string) {
+    setFilterSubmitter(submitter);
+    setFilterPlatform(platform);
+    setRecent(null);
+    fetchRecent(null, false, submitter, platform).catch(() => setRecent([]));
   }
 
   useEffect(() => {
@@ -343,9 +358,55 @@ export default function Home() {
         )}
 
         <div>
-          <h2 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-600 mb-2">
-            Recent
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-600">
+              Recent
+            </h2>
+            {(filterSubmitter || filterPlatform) && (
+              <button
+                type="button"
+                onClick={() => applyFilter("", "")}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors"
+              >
+                clear filters
+              </button>
+            )}
+          </div>
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {PEOPLE.map((p) => (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)}
+                className={`w-6 h-6 rounded-full overflow-hidden cursor-pointer transition-all ${
+                  filterSubmitter === p.name
+                    ? "ring-2 ring-white ring-offset-1 ring-offset-zinc-950"
+                    : "opacity-40 hover:opacity-70"
+                }`}
+              >
+                <img src={p.img} alt={p.name} title={p.name} className="w-full h-full object-cover" />
+              </button>
+            ))}
+            <span className="w-px bg-zinc-800 mx-1" />
+            {([
+              { key: "spotify", label: "Spotify" },
+              { key: "apple", label: "Apple Music" },
+              { key: "youtube", label: "YouTube" },
+            ] as const).map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => applyFilter(filterSubmitter, filterPlatform === p.key ? "" : p.key)}
+                className={`cursor-pointer transition-all ${
+                  filterPlatform === p.key
+                    ? "opacity-100 scale-110"
+                    : "opacity-40 hover:opacity-70"
+                }`}
+              >
+                <PlatformIcon platform={p.label} />
+              </button>
+            ))}
+          </div>
           {recent === null ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
@@ -384,7 +445,10 @@ export default function Home() {
                         const hasSpotify = !!s.spotify_link;
                         const hasApple = !!s.apple_music_link;
                         const hasYouTube = !!s.youtube_link;
-                        const showYouTube = hasYouTube && (!hasSpotify || !hasApple);
+                        // When filtering by platform, show all available. Otherwise smart logic.
+                        const showYouTube = filterPlatform
+                          ? hasYouTube
+                          : hasYouTube && (!hasSpotify || !hasApple);
                         return (
                           <>
                             {hasSpotify && (

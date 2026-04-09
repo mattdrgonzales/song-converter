@@ -11,6 +11,10 @@ interface RecentSong {
   submitted_by: string;
 }
 
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
   const baseId = process.env.AIRTABLE_BASE_ID;
   const token = process.env.AIRTABLE_TOKEN;
@@ -20,10 +24,32 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const cursor = request.nextUrl.searchParams.get("cursor") ?? "";
+  const submitter = request.nextUrl.searchParams.get("submitter") ?? "";
+  const platform = request.nextUrl.searchParams.get("platform") ?? "";
   const pageSize = 5;
+
+  // Build Airtable filter formula
+  const filters: string[] = [];
+  if (submitter) {
+    filters.push(`{submitted_by}="${submitter.replace(/"/g, '\\"')}"`);
+  }
+  if (platform === "spotify") {
+    filters.push(`{spotify_link}!=""`);
+  } else if (platform === "apple") {
+    filters.push(`{apple_music_link}!=""`);
+  } else if (platform === "youtube") {
+    filters.push(`{youtube_link}!=""`);
+  }
 
   try {
     let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by`;
+
+    if (filters.length > 0) {
+      const formula = filters.length === 1
+        ? filters[0]
+        : `AND(${filters.join(",")})`;
+      url += `&filterByFormula=${encodeURIComponent(formula)}`;
+    }
 
     if (cursor) {
       url += `&offset=${encodeURIComponent(cursor)}`;
@@ -41,8 +67,8 @@ export async function GET(request: NextRequest): Promise<Response> {
     const data = await res.json();
     const songs: RecentSong[] = (data.records ?? []).map(
       (r: { fields: Record<string, string> }) => ({
-        song_title: r.fields.song_title ?? "",
-        artist: r.fields.artist ?? "",
+        song_title: decodeEntities(r.fields.song_title ?? ""),
+        artist: decodeEntities(r.fields.artist ?? ""),
         spotify_link: r.fields.spotify_link ?? "",
         apple_music_link: r.fields.apple_music_link ?? "",
         youtube_link: r.fields.youtube_link ?? "",
