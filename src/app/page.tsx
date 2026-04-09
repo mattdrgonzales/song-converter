@@ -458,30 +458,64 @@ export default function Home() {
           </div>
 
           {/* Filters */}
-          <div className="flex gap-1.5 mb-2 flex-wrap items-center">
-            {allPeople.map((p) => (
-              <button key={p.name} type="button" onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)}
-                className={`w-6 h-6 rounded-full overflow-hidden cursor-pointer transition-all ${filterSubmitter === p.name ? "ring-2 ring-white ring-offset-1 ring-offset-zinc-950" : "opacity-40 hover:opacity-70"}`}>
-                <img src={p.img} alt={p.name} title={p.name} className="w-full h-full object-cover" />
-              </button>
-            ))}
-            <span className="w-px h-4 bg-zinc-800 mx-1" />
-            {([{ key: "spotify", label: "Spotify" }, { key: "apple", label: "Apple Music" }, { key: "youtube", label: "YouTube" }] as const).map((p) => (
-              <button key={p.key} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform === p.key ? "" : p.key)}
-                className={`cursor-pointer transition-all ${filterPlatform === p.key ? "opacity-100 scale-110" : "opacity-40 hover:opacity-70"}`}>
-                <PlatformIcon platform={p.label} />
-              </button>
-            ))}
+          <div className="flex gap-2 mb-3">
+            {/* Submitter dropdown */}
+            <div className="relative flex-1">
+              <select
+                value={filterSubmitter}
+                onChange={(e) => applyFilter(e.target.value, filterPlatform)}
+                className="w-full h-9 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors"
+              >
+                <option value="">All people</option>
+                {allPeople.map((p) => (
+                  <option key={p.name} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+              {filterSubmitter && avatarMap[filterSubmitter] && (
+                <img src={avatarMap[filterSubmitter]} alt="" className="absolute right-6 top-1.5 w-6 h-6 rounded-full object-cover pointer-events-none" />
+              )}
+            </div>
+
+            {/* Platform dropdown */}
+            <div className="relative flex-1">
+              <select
+                value={filterPlatform}
+                onChange={(e) => applyFilter(filterSubmitter, e.target.value)}
+                className="w-full h-9 pl-2 pr-6 rounded-lg border border-zinc-800 bg-zinc-900 text-xs text-zinc-300 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors"
+              >
+                <option value="">All platforms</option>
+                <option value="spotify">Spotify</option>
+                <option value="apple">Apple Music</option>
+                <option value="youtube">YouTube</option>
+              </select>
+              {filterPlatform && (
+                <div className="absolute right-6 top-1.5 pointer-events-none">
+                  <PlatformIcon platform={filterPlatform === "spotify" ? "Spotify" : filterPlatform === "apple" ? "Apple Music" : "YouTube"} />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date filter */}
-          <div className="flex gap-1.5 mb-3 flex-wrap">
+          <div className="flex gap-1.5 mb-3 items-center flex-wrap">
             {DATE_PRESETS.map((preset) => (
               <button key={preset.label} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
-                className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all border ${filterDays === preset.days ? "border-zinc-400 text-zinc-200" : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"}`}>
+                className={`text-[10px] px-2.5 py-1 rounded-lg cursor-pointer transition-all border ${filterDays === preset.days ? "border-zinc-400 text-zinc-200 bg-zinc-800" : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"}`}>
                 {preset.label}
               </button>
             ))}
+            <input
+              type="date"
+              onChange={(e) => {
+                if (e.target.value) {
+                  const d = new Date(e.target.value);
+                  const now = new Date();
+                  const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+                  applyFilter(filterSubmitter, filterPlatform, diffDays);
+                }
+              }}
+              className="text-[10px] px-2 py-1 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-500 outline-none cursor-pointer focus:border-zinc-600 transition-colors"
+            />
           </div>
 
           {recent === null ? (
