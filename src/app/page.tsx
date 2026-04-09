@@ -85,9 +85,6 @@ function SourceTag({ song }: { song: RecentSong }) {
   return null;
 }
 
-const FILTER_CHIP = "text-[10px] px-2 py-1 rounded-md cursor-pointer transition-all border whitespace-nowrap";
-const CHIP_ACTIVE = "border-zinc-500 text-zinc-200 bg-zinc-800";
-const CHIP_INACTIVE = "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600";
 
 // --- Crop helper ---
 
@@ -403,42 +400,33 @@ export default function Home() {
       {/* Song list */}
       <div className="flex-1 max-w-4xl mx-auto w-full px-4 md:px-6 py-6">
         {/* Filter bar */}
-        <div className="flex items-center gap-1.5 mb-5 overflow-x-auto scrollbar-hide pb-1">
-          {/* People chips */}
-          <button type="button" onClick={() => applyFilter("", filterPlatform)} className={`${FILTER_CHIP} ${!filterSubmitter ? CHIP_ACTIVE : CHIP_INACTIVE}`}>Everyone</button>
-          {profiles.map((p) => (
-            <button key={p.name} type="button" onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)} className={`${FILTER_CHIP} ${filterSubmitter === p.name ? CHIP_ACTIVE : CHIP_INACTIVE}`}>{p.name}</button>
-          ))}
+        <div className="flex items-center gap-2 mb-5">
+          <select value={filterSubmitter} onChange={(e) => applyFilter(e.target.value, filterPlatform)} className="h-7 pl-2 pr-5 rounded-md border border-zinc-800 bg-zinc-900 text-[11px] text-zinc-400 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors">
+            <option value="">Profile</option>
+            {profiles.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+          </select>
 
-          <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
+          <select value={filterPlatform} onChange={(e) => applyFilter(filterSubmitter, e.target.value)} className="h-7 pl-2 pr-5 rounded-md border border-zinc-800 bg-zinc-900 text-[11px] text-zinc-400 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors">
+            <option value="">Platform</option>
+            <option value="spotify">Spotify</option>
+            <option value="apple">Apple Music</option>
+            <option value="youtube">YouTube</option>
+            <option value="soundcloud">SoundCloud</option>
+          </select>
 
-          {/* Platform chips */}
-          <button type="button" onClick={() => applyFilter(filterSubmitter, "")} className={`${FILTER_CHIP} ${!filterPlatform ? CHIP_ACTIVE : CHIP_INACTIVE}`}>All</button>
-          {[{ val: "spotify", label: "Spotify" }, { val: "apple", label: "Apple" }, { val: "youtube", label: "YouTube" }, { val: "soundcloud", label: "SC" }].map(({ val, label }) => (
-            <button key={val} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform === val ? "" : val)} className={`${FILTER_CHIP} ${filterPlatform === val ? CHIP_ACTIVE : CHIP_INACTIVE}`}>{label}</button>
-          ))}
-
-          <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
-
-          {/* Date chips */}
-          {DATE_PRESETS.map((preset) => (
-            <button key={preset.label} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
-              className={`${FILTER_CHIP} ${filterDays === preset.days ? CHIP_ACTIVE : CHIP_INACTIVE}`}>
-              {preset.label}
-            </button>
-          ))}
+          <select value={filterDays === null ? "" : String(filterDays)} onChange={(e) => { const v = e.target.value; applyFilter(filterSubmitter, filterPlatform, v === "" ? null : Number(v)); }} className="h-7 pl-2 pr-5 rounded-md border border-zinc-800 bg-zinc-900 text-[11px] text-zinc-400 outline-none cursor-pointer appearance-none focus:border-zinc-600 transition-colors">
+            <option value="">Date</option>
+            {DATE_PRESETS.map((p) => <option key={p.label} value={String(p.days)}>{p.label}</option>)}
+          </select>
 
           {hasFilters && (
-            <>
-              <div className="w-px h-3.5 bg-zinc-800 shrink-0 mx-0.5" />
-              <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors whitespace-nowrap">
-                Clear
-              </button>
-            </>
+            <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors">
+              Clear
+            </button>
           )}
 
           {/* View toggle */}
-          <div className="flex items-center gap-0.5 ml-auto shrink-0 pl-2">
+          <div className="flex items-center gap-0.5 ml-auto shrink-0">
             <button type="button" onClick={() => setViewMode("table")} className={`p-1 rounded cursor-pointer transition-colors ${viewMode === "table" ? "bg-zinc-800 text-zinc-200" : "text-zinc-600 hover:text-zinc-400"}`} title="Table view">
               <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M1 3h14v1.5H1zm0 4h14v1.5H1zm0 4h14v1.5H1z" /></svg>
             </button>
