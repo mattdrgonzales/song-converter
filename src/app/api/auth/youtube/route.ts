@@ -12,7 +12,7 @@ export const runtime = "edge";
  * DELETE THIS ROUTE after setup is complete.
  */
 
-const REDIRECT_URI = "http://localhost:3000/api/auth/youtube";
+const REDIRECT_URI = "https://mgsongz.vercel.app/api/auth/youtube";
 const SCOPES = "https://www.googleapis.com/auth/youtube";
 
 export async function GET(request: NextRequest): Promise<Response> {
