@@ -26,6 +26,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   const cursor = request.nextUrl.searchParams.get("cursor") ?? "";
   const submitter = request.nextUrl.searchParams.get("submitter") ?? "";
   const platform = request.nextUrl.searchParams.get("platform") ?? "";
+  const since = request.nextUrl.searchParams.get("since") ?? "";
   const pageSize = 5;
 
   // Build Airtable filter formula
@@ -39,6 +40,9 @@ export async function GET(request: NextRequest): Promise<Response> {
     filters.push(`{apple_music_link}!=""`);
   } else if (platform === "youtube") {
     filters.push(`{youtube_link}!=""`);
+  }
+  if (since) {
+    filters.push(`IS_AFTER({last_searched},"${since}")`);
   }
 
   try {

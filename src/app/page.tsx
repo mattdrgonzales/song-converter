@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
+import Cropper from "react-easy-crop";
+import type { Area } from "react-easy-crop";
 
 interface LinkData {
   platform: string;
@@ -23,6 +25,11 @@ interface RecentSong {
   submitted_by: string;
 }
 
+interface PersonData {
+  name: string;
+  img: string;
+}
+
 const PLATFORM_ICONS: Record<string, string> = {
   Spotify:
     "M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.6 0 12 0zm5.5 17.3c-.2.3-.6.4-1 .2-2.7-1.6-6-2-10-1.1-.4.1-.7-.2-.8-.5-.1-.4.2-.7.5-.8 4.3-1 8.1-.6 11.1 1.2.3.2.4.7.2 1zm1.5-3.3c-.3.4-.8.5-1.2.3-3.1-1.9-7.7-2.4-11.3-1.3-.5.1-1-.1-1.1-.6-.1-.5.1-1 .6-1.1 4.1-1.3 9.2-.7 12.7 1.5.4.2.5.8.3 1.2zm.1-3.4c-3.7-2.2-9.8-2.4-13.3-1.3-.5.2-1.1-.1-1.3-.6-.2-.5.1-1.1.6-1.3 4.1-1.3 10.8-1 15 1.5.5.3.6.9.4 1.4-.3.4-.9.6-1.4.3z",
@@ -32,41 +39,39 @@ const PLATFORM_ICONS: Record<string, string> = {
     "M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
 };
 
-const AVATARS: Record<string, string> = {
-  Matty: "/matty.png",
-  Dommy: "/dommy.png",
-  Kelsey: "/kelsey.png",
-  Nicky: "/nicky.png",
-  Ninna: "/ninna.png",
-  Marissa: "/marissa.png",
-  Jeff: "/jeff.png",
-};
-
 const PLATFORM_COLORS: Record<string, string> = {
   Spotify: "#1DB954",
   "Apple Music": "#FA243C",
   YouTube: "#FF0000",
 };
 
+const BUILTIN_PEOPLE: PersonData[] = [
+  { name: "Matty", img: "/matty.png" },
+  { name: "Dommy", img: "/dommy.png" },
+  { name: "Kelsey", img: "/kelsey.png" },
+  { name: "Nicky", img: "/nicky.png" },
+  { name: "Ninna", img: "/ninna.png" },
+  { name: "Marissa", img: "/marissa.png" },
+  { name: "Jeff", img: "/jeff.png" },
+];
+
+const DATE_PRESETS = [
+  { label: "Today", days: 0 },
+  { label: "Yesterday", days: 1 },
+  { label: "This week", days: 7 },
+  { label: "30 days", days: 30 },
+];
+
 function PlatformIcon({ platform }: { platform: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="w-6 h-6 shrink-0"
-      fill={PLATFORM_COLORS[platform] ?? "currentColor"}
-    >
+    <svg viewBox="0 0 24 24" className="w-6 h-6 shrink-0" fill={PLATFORM_COLORS[platform] ?? "currentColor"}>
       <path d={PLATFORM_ICONS[platform] ?? ""} />
     </svg>
   );
 }
 
-function PersonCarousel({
-  people,
-  selected,
-  loading,
-  onSelect,
-}: {
-  people: { name: string; img: string }[];
+function PersonCarousel({ people, selected, loading, onSelect }: {
+  people: PersonData[];
   selected: string;
   loading: boolean;
   onSelect: (name: string) => void;
@@ -92,27 +97,178 @@ function PersonCarousel({
               : "opacity-70 active:scale-95"
           }`}
         >
-          <img
-            src={person.img}
-            alt={person.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <img src={person.img} alt={person.name} className="w-full h-full object-cover" loading="lazy" />
         </button>
       ))}
     </div>
   );
 }
 
-const PEOPLE = [
-  { name: "Matty", img: "/matty.png" },
-  { name: "Dommy", img: "/dommy.png" },
-  { name: "Kelsey", img: "/kelsey.png" },
-  { name: "Nicky", img: "/nicky.png" },
-  { name: "Ninna", img: "/ninna.png" },
-  { name: "Marissa", img: "/marissa.png" },
-  { name: "Jeff", img: "/jeff.png" },
-];
+// --- Crop helper ---
+
+async function getCroppedImg(imageSrc: string, crop: Area): Promise<string> {
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  await new Promise<void>((resolve) => { image.onload = () => resolve(); image.src = imageSrc; });
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 96;
+  const ctx = canvas.getContext("2d")!;
+  ctx.beginPath();
+  ctx.arc(48, 48, 48, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, 96, 96);
+  return canvas.toDataURL("image/png");
+}
+
+// --- Add Profile Modal ---
+
+function AddProfileModal({ onClose, onCreated }: { onClose: () => void; onCreated: (p: PersonData) => void }) {
+  const [step, setStep] = useState<"pick" | "crop" | "name">("pick");
+  const [imageSrc, setImageSrc] = useState("");
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
+  const [croppedImage, setCroppedImage] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const onCropComplete = useCallback((_: Area, croppedAreaPixels: Area) => {
+    setCroppedArea(croppedAreaPixels);
+  }, []);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageSrc(reader.result as string);
+      setStep("crop");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleCropDone() {
+    if (!croppedArea || !imageSrc) return;
+    const result = await getCroppedImg(imageSrc, croppedArea);
+    setCroppedImage(result);
+    setStep("name");
+  }
+
+  async function handleSave() {
+    if (!profileName.trim() || !croppedImage) return;
+    setSaving(true);
+    setError("");
+    try {
+      // Capitalize first letter, lowercase rest
+      const formattedName = profileName.trim().charAt(0).toUpperCase() + profileName.trim().slice(1).toLowerCase();
+      const res = await fetch("/api/profiles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: formattedName, image: croppedImage }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error);
+        return;
+      }
+      onCreated(data.profile);
+    } catch {
+      setError("Failed to save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
+      <div className="bg-zinc-900 rounded-xl p-5 w-full max-w-sm space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Add Profile</h3>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300 cursor-pointer text-lg leading-none">&times;</button>
+        </div>
+
+        {step === "pick" && (
+          <div className="space-y-3">
+            <p className="text-xs text-zinc-400">Upload a photo to use as your avatar.</p>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="w-full h-10 rounded-lg border border-zinc-700 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 cursor-pointer transition-colors"
+            >
+              Choose Photo
+            </button>
+          </div>
+        )}
+
+        {step === "crop" && (
+          <div className="space-y-3">
+            <div className="relative w-full h-64 rounded-lg overflow-hidden bg-black">
+              <Cropper
+                image={imageSrc}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={onCropComplete}
+              />
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.1}
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-full"
+            />
+            <button
+              type="button"
+              onClick={handleCropDone}
+              className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors"
+            >
+              Crop
+            </button>
+          </div>
+        )}
+
+        {step === "name" && (
+          <div className="space-y-3">
+            <div className="flex justify-center">
+              <img src={croppedImage} alt="Preview" className="w-16 h-16 rounded-full" />
+            </div>
+            <input
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Your name"
+              maxLength={20}
+              className="w-full h-10 px-3 rounded-lg border border-zinc-700 bg-transparent text-sm outline-none focus:ring-2 focus:ring-zinc-100 transition-shadow"
+              autoFocus
+            />
+            {error && <p className="text-xs text-red-400">{error}</p>}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !profileName.trim()}
+              className="w-full h-10 rounded-lg bg-white text-black text-sm font-medium cursor-pointer hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving..." : "Save Profile"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Main ---
 
 export default function Home() {
   const [url, setUrl] = useState("");
@@ -133,62 +289,72 @@ export default function Home() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterSubmitter, setFilterSubmitter] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("");
+  const [filterDays, setFilterDays] = useState<number | null>(null);
+  const [showAddProfile, setShowAddProfile] = useState(false);
+  const [customProfiles, setCustomProfiles] = useState<PersonData[]>([]);
 
-  async function fetchRecent(cursor?: string | null, append = false, submitter?: string, platform?: string) {
+  const allPeople = [...BUILTIN_PEOPLE, ...customProfiles];
+  const avatarMap: Record<string, string> = {};
+  for (const p of allPeople) avatarMap[p.name] = p.img;
+
+  function getSinceDate(days: number | null): string {
+    if (days === null) return "";
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+
+  async function fetchRecent(cursor?: string | null, append = false, submitter?: string, platform?: string, days?: number | null) {
     const params = new URLSearchParams();
     if (cursor) params.set("cursor", cursor);
     const sub = submitter ?? filterSubmitter;
     const plat = platform ?? filterPlatform;
+    const d = days !== undefined ? days : filterDays;
     if (sub) params.set("submitter", sub);
     if (plat) params.set("platform", plat);
+    const since = getSinceDate(d);
+    if (since) params.set("since", since);
     const qs = params.toString() ? `?${params.toString()}` : "";
     const res = await fetch(`/api/recent${qs}`);
-    const d = await res.json();
-    setRecent((prev) => append ? [...(prev ?? []), ...(d.songs ?? [])] : d.songs ?? []);
-    setRecentCursor(d.cursor ?? null);
-    setHasMore(d.hasMore ?? false);
+    const data = await res.json();
+    setRecent((prev) => append ? [...(prev ?? []), ...(data.songs ?? [])] : data.songs ?? []);
+    setRecentCursor(data.cursor ?? null);
+    setHasMore(data.hasMore ?? false);
   }
 
-  function applyFilter(submitter: string, platform: string) {
+  function applyFilter(submitter: string, platform: string, days?: number | null) {
+    const d = days !== undefined ? days : filterDays;
     setFilterSubmitter(submitter);
     setFilterPlatform(platform);
+    if (days !== undefined) setFilterDays(days);
     setRecent(null);
-    fetchRecent(null, false, submitter, platform).catch(() => setRecent([]));
+    fetchRecent(null, false, submitter, platform, d).catch(() => setRecent([]));
   }
 
   useEffect(() => {
     fetchRecent().catch(() => setRecent([]));
+    fetch("/api/profiles").then((r) => r.json()).then((d) => setCustomProfiles(d.profiles ?? [])).catch(() => {});
   }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
-
     setLoading(true);
     setError("");
     setSong(null);
-
     try {
       const res = await fetch("/api/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim(), submitted_by: name.trim() || undefined }),
       });
-
       const data = await res.json();
-
-      if (!data.success) {
-        setError(data.error);
-        return;
-      }
-
+      if (!data.success) { setError(data.error); return; }
       setSong(data.data);
       fetchRecent().catch(() => {});
-    } catch {
-      setError("Something went wrong. Try again.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError("Something went wrong. Try again."); }
+    finally { setLoading(false); }
   }
 
   async function copyToClipboard(text: string, platform: string) {
@@ -197,159 +363,85 @@ export default function Home() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  function handleProfileCreated(profile: PersonData) {
+    setCustomProfiles((prev) => [...prev, profile]);
+    setName(profile.name);
+    localStorage.setItem("song-converter-name", profile.name);
+    setShowAddProfile(false);
+    setShowPicker(false);
+  }
+
+  const hasFilters = filterSubmitter || filterPlatform || filterDays !== null;
+
   return (
     <main className="relative flex flex-col min-h-screen px-4 pt-12 pb-16 md:pt-16 md:items-center md:justify-center">
-      <div
-        className="pointer-events-none fixed inset-0 bg-center bg-no-repeat opacity-[0.04] hidden md:block"
-        style={{ backgroundImage: "url(/icon.png)", backgroundSize: "400px" }}
-      />
+      <div className="pointer-events-none fixed inset-0 bg-center bg-no-repeat opacity-[0.04] hidden md:block" style={{ backgroundImage: "url(/icon.png)", backgroundSize: "400px" }} />
       <div className="w-full max-w-lg">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight mb-1">
-          Share Your Music Here
-        </h1>
-        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 mb-6">
-          Paste a Spotify, Apple Music, or YouTube link.
-        </p>
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight mb-1">Share Your Music Here</h1>
+        <p className="text-xs md:text-sm text-zinc-500 dark:text-zinc-400 mb-6">Paste a Spotify, Apple Music, or YouTube link.</p>
 
         <form onSubmit={handleSubmit} className="mb-6">
           <div className="flex flex-col gap-3 items-center">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://open.spotify.com/track/..."
-              autoComplete="off"
-              className="w-full h-12 md:h-10 px-3 rounded-lg md:rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-base md:text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow"
-              required
-            />
+            <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://open.spotify.com/track/..." autoComplete="off" className="w-full h-12 md:h-10 px-3 rounded-lg md:rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent text-base md:text-sm outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-shadow" required />
             {name && !showPicker ? (
               <div className="flex flex-col items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex flex-col items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
-                >
+                <button type="submit" disabled={loading} className="flex flex-col items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform">
                   <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-zinc-950">
-                    <img
-                      src={AVATARS[name] ?? ""}
-                      alt={name}
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={avatarMap[name] ?? ""} alt={name} className="w-full h-full object-cover" />
                   </div>
-                  {loading && (
-                    <span className="text-[10px] text-zinc-400">...</span>
-                  )}
+                  {loading && <span className="text-[10px] text-zinc-400">...</span>}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPicker(true)}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-300 active:text-zinc-200 cursor-pointer transition-colors py-1 px-2"
-                >
-                  change profile
-                </button>
+                <button type="button" onClick={() => setShowPicker(true)} className="text-[10px] text-zinc-500 hover:text-zinc-300 active:text-zinc-200 cursor-pointer transition-colors py-1 px-2">change profile</button>
               </div>
             ) : (
               <>
-                {/* Mobile: carousel */}
                 <div className="md:hidden w-full">
                   <PersonCarousel
-                    people={PEOPLE}
+                    people={allPeople}
                     selected={name}
                     loading={loading}
-                    onSelect={(n) => {
-                      setName(n);
-                      localStorage.setItem("song-converter-name", n);
-                      setShowPicker(false);
-                    }}
+                    onSelect={(n) => { setName(n); localStorage.setItem("song-converter-name", n); setShowPicker(false); }}
                   />
                 </div>
-                {/* Desktop: all faces with names */}
-                <div className="hidden md:flex gap-4 justify-center">
-                  {PEOPLE.map((person) => (
-                    <button
-                      key={person.name}
-                      type={name === person.name ? "submit" : "button"}
-                      disabled={loading}
-                      onClick={() => {
-                        setName(person.name);
-                        localStorage.setItem("song-converter-name", person.name);
-                        setShowPicker(false);
-                      }}
-                      className={`flex flex-col items-center gap-1 cursor-pointer transition-all disabled:cursor-not-allowed ${
-                        name === person.name
-                          ? "opacity-100 scale-110"
-                          : "opacity-50 hover:opacity-80"
-                      }`}
-                    >
-                      <div
-                        className={`w-12 h-12 rounded-full overflow-hidden ${
-                          name === person.name
-                            ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
-                            : ""
-                        }`}
-                      >
-                        <img
-                          src={person.img}
-                          alt={person.name}
-                          className="w-full h-full object-cover"
-                        />
+                <div className="hidden md:flex gap-4 justify-center flex-wrap">
+                  {allPeople.map((person) => (
+                    <button key={person.name} type={name === person.name ? "submit" : "button"} disabled={loading} onClick={() => { setName(person.name); localStorage.setItem("song-converter-name", person.name); setShowPicker(false); }}
+                      className={`flex flex-col items-center gap-1 cursor-pointer transition-all disabled:cursor-not-allowed ${name === person.name ? "opacity-100 scale-110" : "opacity-50 hover:opacity-80"}`}>
+                      <div className={`w-12 h-12 rounded-full overflow-hidden ${name === person.name ? "ring-2 ring-white ring-offset-2 ring-offset-zinc-950" : ""}`}>
+                        <img src={person.img} alt={person.name} className="w-full h-full object-cover" />
                       </div>
                       <span className="text-[10px] text-zinc-400">{person.name}</span>
                     </button>
                   ))}
                 </div>
+                <button type="button" onClick={() => setShowAddProfile(true)} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors">+ add profile</button>
               </>
             )}
           </div>
         </form>
 
-        {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-4">
-            {error}
-          </p>
-        )}
+        {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>}
 
         {song && (
           <div className="space-y-3 mb-8">
             <div className="flex items-center gap-3">
-              {song.thumbnail && (
-                <img
-                  src={song.thumbnail}
-                  alt=""
-                  className="w-14 h-14 rounded-md object-cover shrink-0"
-                />
-              )}
+              {song.thumbnail && <img src={song.thumbnail} alt="" className="w-14 h-14 rounded-md object-cover shrink-0" />}
               <div className="min-w-0">
                 <p className="font-medium text-sm truncate">{song.title}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                  {song.artist}
-                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{song.artist}</p>
               </div>
             </div>
-
             <div className="flex gap-2">
               {song.links.map((link) => (
-                <a
-                  key={link.platform}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 active:bg-zinc-800 transition-colors flex-1 min-w-0"
-                >
+                <a key={link.platform} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 active:bg-zinc-800 transition-colors flex-1 min-w-0">
                   <PlatformIcon platform={link.platform} />
                   <span className="text-xs font-medium truncate">{link.platform}</span>
                 </a>
               ))}
             </div>
-
             <div className="flex gap-2">
               {song.links.map((link) => (
-                <button
-                  key={`copy-${link.platform}`}
-                  type="button"
-                  onClick={() => copyToClipboard(link.url, link.platform)}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-300 active:text-zinc-200 cursor-pointer transition-colors py-1 flex-1"
-                >
+                <button key={`copy-${link.platform}`} type="button" onClick={() => copyToClipboard(link.url, link.platform)} className="text-[10px] text-zinc-500 hover:text-zinc-300 active:text-zinc-200 cursor-pointer transition-colors py-1 flex-1">
                   {copied === link.platform ? "Copied!" : `Copy ${link.platform}`}
                 </button>
               ))}
@@ -359,54 +451,39 @@ export default function Home() {
 
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-600">
-              Recent
-            </h2>
-            {(filterSubmitter || filterPlatform) && (
-              <button
-                type="button"
-                onClick={() => applyFilter("", "")}
-                className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors"
-              >
-                clear filters
-              </button>
+            <h2 className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-600">Recent</h2>
+            {hasFilters && (
+              <button type="button" onClick={() => { setFilterSubmitter(""); setFilterPlatform(""); setFilterDays(null); applyFilter("", "", null); }} className="text-[10px] text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors">clear filters</button>
             )}
           </div>
-          <div className="flex gap-1.5 mb-3 flex-wrap">
-            {PEOPLE.map((p) => (
-              <button
-                key={p.name}
-                type="button"
-                onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)}
-                className={`w-6 h-6 rounded-full overflow-hidden cursor-pointer transition-all ${
-                  filterSubmitter === p.name
-                    ? "ring-2 ring-white ring-offset-1 ring-offset-zinc-950"
-                    : "opacity-40 hover:opacity-70"
-                }`}
-              >
+
+          {/* Filters */}
+          <div className="flex gap-1.5 mb-2 flex-wrap items-center">
+            {allPeople.map((p) => (
+              <button key={p.name} type="button" onClick={() => applyFilter(filterSubmitter === p.name ? "" : p.name, filterPlatform)}
+                className={`w-6 h-6 rounded-full overflow-hidden cursor-pointer transition-all ${filterSubmitter === p.name ? "ring-2 ring-white ring-offset-1 ring-offset-zinc-950" : "opacity-40 hover:opacity-70"}`}>
                 <img src={p.img} alt={p.name} title={p.name} className="w-full h-full object-cover" />
               </button>
             ))}
-            <span className="w-px bg-zinc-800 mx-1" />
-            {([
-              { key: "spotify", label: "Spotify" },
-              { key: "apple", label: "Apple Music" },
-              { key: "youtube", label: "YouTube" },
-            ] as const).map((p) => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => applyFilter(filterSubmitter, filterPlatform === p.key ? "" : p.key)}
-                className={`cursor-pointer transition-all ${
-                  filterPlatform === p.key
-                    ? "opacity-100 scale-110"
-                    : "opacity-40 hover:opacity-70"
-                }`}
-              >
+            <span className="w-px h-4 bg-zinc-800 mx-1" />
+            {([{ key: "spotify", label: "Spotify" }, { key: "apple", label: "Apple Music" }, { key: "youtube", label: "YouTube" }] as const).map((p) => (
+              <button key={p.key} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform === p.key ? "" : p.key)}
+                className={`cursor-pointer transition-all ${filterPlatform === p.key ? "opacity-100 scale-110" : "opacity-40 hover:opacity-70"}`}>
                 <PlatformIcon platform={p.label} />
               </button>
             ))}
           </div>
+
+          {/* Date filter */}
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {DATE_PRESETS.map((preset) => (
+              <button key={preset.label} type="button" onClick={() => applyFilter(filterSubmitter, filterPlatform, filterDays === preset.days ? null : preset.days)}
+                className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-all border ${filterDays === preset.days ? "border-zinc-400 text-zinc-200" : "border-zinc-800 text-zinc-600 hover:text-zinc-400 hover:border-zinc-600"}`}>
+                {preset.label}
+              </button>
+            ))}
+          </div>
+
           {recent === null ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
@@ -414,76 +491,32 @@ export default function Home() {
               ))}
             </div>
           ) : recent.length === 0 ? (
-            <p className="text-xs text-zinc-400 dark:text-zinc-600">No conversions yet.</p>
+            <p className="text-xs text-zinc-400 dark:text-zinc-600">{hasFilters ? "No results for this filter." : "No conversions yet."}</p>
           ) : (
             <>
               <div className="divide-y divide-zinc-800/40">
                 {recent.map((s, i) => (
-                  <div
-                    key={`${s.song_title}-${i}`}
-                    className="flex items-center gap-2.5 py-2.5"
-                  >
-                    {s.submitted_by && AVATARS[s.submitted_by] ? (
-                      <img
-                        src={AVATARS[s.submitted_by]}
-                        alt={s.submitted_by}
-                        title={s.submitted_by}
-                        className="w-7 h-7 rounded-full object-cover shrink-0"
-                        loading="lazy"
-                      />
+                  <div key={`${s.song_title}-${i}`} className="flex items-center gap-2.5 py-2.5">
+                    {s.submitted_by && avatarMap[s.submitted_by] ? (
+                      <img src={avatarMap[s.submitted_by]} alt={s.submitted_by} title={s.submitted_by} className="w-7 h-7 rounded-full object-cover shrink-0" loading="lazy" />
                     ) : (
                       <span className="w-7 h-7 rounded-full bg-zinc-800 shrink-0" />
                     )}
                     <p className="flex-1 min-w-0 text-xs font-medium truncate">
                       {s.song_title}
-                      <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                        {" "}&mdash; {s.artist}
-                      </span>
+                      <span className="font-normal text-zinc-500 dark:text-zinc-400"> &mdash; {s.artist}</span>
                     </p>
                     <div className="flex items-center gap-2 shrink-0">
                       {(() => {
                         const hasSpotify = !!s.spotify_link;
                         const hasApple = !!s.apple_music_link;
                         const hasYouTube = !!s.youtube_link;
-                        // When filtering by platform, show all available. Otherwise smart logic.
-                        const showYouTube = filterPlatform
-                          ? hasYouTube
-                          : hasYouTube && (!hasSpotify || !hasApple);
+                        const showYouTube = filterPlatform ? hasYouTube : hasYouTube && (!hasSpotify || !hasApple);
                         return (
                           <>
-                            {hasSpotify && (
-                              <a
-                                href={s.spotify_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Spotify"
-                                className="p-1.5 -m-1 active:opacity-60 transition-opacity"
-                              >
-                                <PlatformIcon platform="Spotify" />
-                              </a>
-                            )}
-                            {hasApple && (
-                              <a
-                                href={s.apple_music_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Apple Music"
-                                className="p-1.5 -m-1 active:opacity-60 transition-opacity"
-                              >
-                                <PlatformIcon platform="Apple Music" />
-                              </a>
-                            )}
-                            {showYouTube && (
-                              <a
-                                href={s.youtube_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="YouTube"
-                                className="p-1.5 -m-1 active:opacity-60 transition-opacity"
-                              >
-                                <PlatformIcon platform="YouTube" />
-                              </a>
-                            )}
+                            {hasSpotify && <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Spotify" /></a>}
+                            {hasApple && <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Apple Music" /></a>}
+                            {showYouTube && <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="YouTube" /></a>}
                           </>
                         );
                       })()}
@@ -492,16 +525,8 @@ export default function Home() {
                 ))}
               </div>
               {hasMore && (
-                <button
-                  type="button"
-                  disabled={loadingMore}
-                  onClick={async () => {
-                    setLoadingMore(true);
-                    await fetchRecent(recentCursor, true).catch(() => {});
-                    setLoadingMore(false);
-                  }}
-                  className="mt-3 w-full py-2 text-xs text-zinc-500 dark:text-zinc-500 active:text-zinc-300 cursor-pointer transition-colors disabled:opacity-50 text-center"
-                >
+                <button type="button" disabled={loadingMore} onClick={async () => { setLoadingMore(true); await fetchRecent(recentCursor, true).catch(() => {}); setLoadingMore(false); }}
+                  className="mt-3 w-full py-2 text-xs text-zinc-500 active:text-zinc-300 cursor-pointer transition-colors disabled:opacity-50 text-center">
                   {loadingMore ? "..." : "more"}
                 </button>
               )}
@@ -509,6 +534,8 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {showAddProfile && <AddProfileModal onClose={() => setShowAddProfile(false)} onCreated={handleProfileCreated} />}
     </main>
   );
 }
