@@ -107,20 +107,22 @@ function PersonCarousel({ people, selected, loading, onSelect }: {
 // --- Crop helper ---
 
 async function getCroppedImg(imageSrc: string, crop: Area): Promise<string> {
+  const SIZE = 256;
+  const HALF = SIZE / 2;
   const image = new Image();
   image.crossOrigin = "anonymous";
   await new Promise<void>((resolve) => { image.onload = () => resolve(); image.src = imageSrc; });
-  const size = 256;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = SIZE;
+  canvas.height = SIZE;
   const ctx = canvas.getContext("2d")!;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.arc(HALF, HALF, HALF, 0, Math.PI * 2);
   ctx.clip();
-  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, SIZE, SIZE);
+  // Use JPEG at 85% quality — sharp but compact (~15-25KB)
   return canvas.toDataURL("image/jpeg", 0.85);
 }
 
@@ -548,20 +550,7 @@ export default function Home() {
                         const hasSpotify = !!s.spotify_link;
                         const hasApple = !!s.apple_music_link;
                         const hasYouTube = !!s.youtube_link;
-
-                        // When filtering by platform, only show that platform's icon
-                        if (filterPlatform === "spotify") {
-                          return hasSpotify ? <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Spotify" /></a> : null;
-                        }
-                        if (filterPlatform === "apple") {
-                          return hasApple ? <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Apple Music" /></a> : null;
-                        }
-                        if (filterPlatform === "youtube") {
-                          return hasYouTube ? <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="YouTube" /></a> : null;
-                        }
-
-                        // No filter: smart display logic
-                        const showYouTube = hasYouTube && (!hasSpotify || !hasApple);
+                        const showYouTube = filterPlatform ? hasYouTube : hasYouTube && (!hasSpotify || !hasApple);
                         return (
                           <>
                             {hasSpotify && <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Spotify" /></a>}
