@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Share Your Music Here",
+  title: "Real Friends Share Music",
   description: "Convert song links between Spotify, Apple Music, and YouTube",
   icons: {
     icon: "/icon.png",

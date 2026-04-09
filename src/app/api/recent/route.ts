@@ -8,6 +8,7 @@ interface RecentSong {
   spotify_link: string;
   apple_music_link: string;
   youtube_link: string;
+  soundcloud_link: string;
   submitted_by: string;
   last_searched: string;
 }
@@ -41,13 +42,15 @@ export async function GET(request: NextRequest): Promise<Response> {
     filters.push(`{apple_music_link}!=""`);
   } else if (platform === "youtube") {
     filters.push(`{youtube_link}!=""`);
+  } else if (platform === "soundcloud") {
+    filters.push(`{soundcloud_link}!=""`);
   }
   if (since) {
     filters.push(`IS_AFTER({last_searched},"${since}")`);
   }
 
   try {
-    let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=submitted_by&fields%5B%5D=last_searched`;
+    let url = `https://api.airtable.com/v0/${baseId}/Conversions?pageSize=${pageSize}&sort%5B0%5D%5Bfield%5D=last_searched&sort%5B0%5D%5Bdirection%5D=desc&fields%5B%5D=song_title&fields%5B%5D=artist&fields%5B%5D=spotify_link&fields%5B%5D=apple_music_link&fields%5B%5D=youtube_link&fields%5B%5D=soundcloud_link&fields%5B%5D=submitted_by&fields%5B%5D=last_searched`;
 
     if (filters.length > 0) {
       const formula = filters.length === 1
@@ -77,6 +80,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         spotify_link: r.fields.spotify_link ?? "",
         apple_music_link: r.fields.apple_music_link ?? "",
         youtube_link: r.fields.youtube_link ?? "",
+        soundcloud_link: r.fields.soundcloud_link ?? "",
         submitted_by: r.fields.submitted_by ?? "",
         last_searched: r.fields.last_searched ?? "",
       })

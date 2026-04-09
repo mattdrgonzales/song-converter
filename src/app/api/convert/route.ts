@@ -63,6 +63,7 @@ function detectPlatform(url: string): string | null {
     if (host.includes("spotify.com")) return "spotify";
     if (host.includes("apple.com")) return "apple";
     if (host.includes("youtube.com") || host.includes("youtu.be")) return "youtube";
+    if (host.includes("soundcloud.com")) return "soundcloud";
     return null;
   } catch {
     return null;
@@ -145,9 +146,6 @@ async function extractFromYouTube(url: string): Promise<SongInfo> {
 }
 
 async function extractFromAppleMusic(url: string): Promise<SongInfo> {
-  // Try to extract track ID from URL for ISRC lookup later
-  const trackIdMatch = url.match(/[?&]i=(\d+)/) ?? url.match(/\/song\/[^/]+\/(\d+)/);
-
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; SongConverter/1.0)" },
   });
@@ -160,12 +158,10 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
 
   const rawTitle = titleMatch?.[1] ?? titleMatch?.[2] ?? "Unknown";
 
-  // OG title formats: "Song Name - Single", "Song Name by Artist on Apple Music"
   let title = rawTitle
     .replace(/\s*[-–—]\s*(Single|EP|Album)$/i, "")
     .replace(/\s+on\s+Apple\s*Music.*$/i, "");
 
-  // Extract artist from "Song by Artist" pattern in title
   let artistFromTitle = "";
   const byMatch = title.match(/^(.+?)\s+by\s+(.+)$/i);
   if (byMatch) {
@@ -173,7 +169,6 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
     artistFromTitle = byMatch[2].trim();
   }
 
-  // Also try the description: "A song by Artist on Apple Music" or "Artist · Album · ..."
   const descText = descMatch?.[1] ?? descMatch?.[2] ?? "";
   const artistFromDesc = descText.match(/(?:a\s+)?(?:song|album|single|EP)\s+by\s+(.+?)(?:\s+on\s+Apple\s+Music)?$/i);
   const artistFromDot = descText.split("·")[0]?.trim();
@@ -186,13 +181,27 @@ async function extractFromAppleMusic(url: string): Promise<SongInfo> {
   return { title, artist, thumbnail: imgMatch?.[1] ?? imgMatch?.[2] ?? "", source: "apple" };
 }
 
+async function extractFromSoundCloud(url: string): Promise<SongInfo> {
+  const oembedUrl = `https://soundcloud.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+  const res = await fetch(oembedUrl);
+  if (!res.ok) throw new Error("Could not fetch track info from SoundCloud.");
+  const data = await res.json();
+
+  // oEmbed title is typically "Track Name by Artist Name"
+  const raw = data.title ?? "Unknown";
+  const byMatch = raw.match(/^(.+?)\s+by\s+(.+)$/i);
+  const title = byMatch ? byMatch[1].trim() : raw;
+  const artist = byMatch ? byMatch[2].trim() : (data.author_name ?? "");
+  const thumbnail = data.thumbnail_url ?? "";
+
+  return { title, artist, thumbnail, source: "soundcloud" };
+}
+
 // --- Find direct links on each platform ---
 
 async function findSpotifyLink(title: string, artist: string): Promise<string> {
-  const query = [title, artist].filter(Boolean).join(" ").trim();
   try {
     const token = await getSpotifyToken();
-    // Use field filters for better precision
     const primaryArtist = artist.split(",")[0].trim();
     const q = primaryArtist
       ? `track:${title} artist:${primaryArtist}`
@@ -204,7 +213,6 @@ async function findSpotifyLink(title: string, artist: string): Promise<string> {
     if (res.ok) {
       const data = await res.json();
       const items = data.tracks?.items ?? [];
-      // Prefer exact title match
       const titleLower = title.toLowerCase();
       const exact = items.find(
         (t: { name: string }) => t.name.toLowerCase() === titleLower
@@ -221,9 +229,6 @@ async function findSpotifyLink(title: string, artist: string): Promise<string> {
 }
 
 async function findAppleMusicLink(title: string, artist: string, isrc?: string): Promise<string> {
-  const query = [title, artist].filter(Boolean).join(" ").trim();
-
-  // Strategy 1: Search by ISRC if available (most precise, finds pre-releases)
   if (isrc) {
     try {
       const isrcUrl = `https://itunes.apple.com/lookup?isrc=${isrc}&entity=song&country=US`;
@@ -240,8 +245,8 @@ async function findAppleMusicLink(title: string, artist: string, isrc?: string):
     }
   }
 
-  // Strategy 2: Text search with title match filtering
   try {
+    const query = [title, artist].filter(Boolean).join(" ").trim();
     const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=10`;
     const res = await fetch(searchUrl);
     if (res.ok) {
@@ -306,7 +311,8 @@ async function logConversion(
   const linkMap = Object.fromEntries(links.map((l) => [l.platform, l.url]));
   const platformLabel =
     sourcePlatform === "spotify" ? "Spotify" :
-    sourcePlatform === "apple" ? "Apple Music" : "YouTube";
+    sourcePlatform === "apple" ? "Apple Music" :
+    sourcePlatform === "soundcloud" ? "SoundCloud" : "YouTube";
   const now = new Date().toISOString();
 
   // Check if this song already has a record (match on song_title + artist)
@@ -319,7 +325,6 @@ async function logConversion(
     const existing = searchData.records?.[0];
 
     if (existing) {
-      // Update: increment count, update last_searched and links
       const currentCount = (existing.fields?.count as number) ?? 1;
       await fetch(`${tableUrl}/${existing.id}`, {
         method: "PATCH",
@@ -332,6 +337,7 @@ async function logConversion(
             spotify_link: linkMap["Spotify"] ?? existing.fields?.spotify_link ?? "",
             apple_music_link: linkMap["Apple Music"] ?? existing.fields?.apple_music_link ?? "",
             youtube_link: linkMap["YouTube"] ?? existing.fields?.youtube_link ?? "",
+            soundcloud_link: linkMap["SoundCloud"] ?? existing.fields?.soundcloud_link ?? "",
             isrc: info.isrc ?? existing.fields?.isrc ?? "",
             ...(submittedBy ? { submitted_by: submittedBy } : {}),
           },
@@ -354,6 +360,7 @@ async function logConversion(
         spotify_link: linkMap["Spotify"] ?? "",
         apple_music_link: linkMap["Apple Music"] ?? "",
         youtube_link: linkMap["YouTube"] ?? "",
+        soundcloud_link: linkMap["SoundCloud"] ?? "",
         isrc: info.isrc ?? "",
         count: 1,
         last_searched: now,
@@ -363,19 +370,22 @@ async function logConversion(
   });
 }
 
-// --- Build links for the other two platforms ---
+// --- Build links for all platforms ---
 
 interface AllLinks {
   spotify: string;
   apple: string;
   youtube: string;
+  soundcloud: string;
 }
 
 async function findAllLinks(info: SongInfo, inputUrl: string): Promise<AllLinks> {
+  // SoundCloud content is typically DJ sets / niche — don't cross-search for it
+  // and don't try to find SoundCloud matches from other platforms
   const [spotify, apple, youtube] = await Promise.all([
     info.source === "spotify"
       ? Promise.resolve(inputUrl)
-      : findSpotifyLink(info.title, info.artist),
+      : info.source === "soundcloud" ? findSpotifyLink(info.title, info.artist) : findSpotifyLink(info.title, info.artist),
     info.source === "apple"
       ? Promise.resolve(inputUrl)
       : findAppleMusicLink(info.title, info.artist, info.isrc),
@@ -383,28 +393,20 @@ async function findAllLinks(info: SongInfo, inputUrl: string): Promise<AllLinks>
       ? Promise.resolve(inputUrl)
       : findYouTubeLink(info.title, info.artist),
   ]);
-  return { spotify, apple, youtube };
+  return {
+    spotify,
+    apple,
+    youtube,
+    soundcloud: info.source === "soundcloud" ? inputUrl : "",
+  };
 }
 
 function buildDisplayLinks(all: AllLinks): PlatformLink[] {
-  const hasSpotify = all.spotify !== "";
-  const hasApple = all.apple !== "";
-  const hasYouTube = all.youtube !== "";
-
-  // Priority: Spotify + Apple Music if both available
-  // Fallback: whichever streaming service exists + YouTube
-  // YouTube-only: show YouTube alone (DJ sets, obscure content)
-  if (hasSpotify && hasApple) {
-    return [
-      { platform: "Spotify", url: all.spotify },
-      { platform: "Apple Music", url: all.apple },
-    ];
-  }
-
   const links: PlatformLink[] = [];
-  if (hasSpotify) links.push({ platform: "Spotify", url: all.spotify });
-  if (hasApple) links.push({ platform: "Apple Music", url: all.apple });
-  if (hasYouTube) links.push({ platform: "YouTube", url: all.youtube });
+  if (all.spotify) links.push({ platform: "Spotify", url: all.spotify });
+  if (all.apple) links.push({ platform: "Apple Music", url: all.apple });
+  if (all.youtube) links.push({ platform: "YouTube", url: all.youtube });
+  if (all.soundcloud) links.push({ platform: "SoundCloud", url: all.soundcloud });
   return links;
 }
 
@@ -423,7 +425,7 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
     return Response.json(
       {
         success: false,
-        error: "Paste a link from Spotify, Apple Music, or YouTube.",
+        error: "Paste a link from Spotify, Apple Music, YouTube, or SoundCloud.",
       } satisfies ConvertResult,
       { status: 400 }
     );
@@ -440,6 +442,9 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
     case "apple":
       info = await extractFromAppleMusic(url);
       break;
+    case "soundcloud":
+      info = await extractFromSoundCloud(url);
+      break;
     default:
       return Response.json(
         { success: false, error: "Unsupported platform." } satisfies ConvertResult,
@@ -448,13 +453,14 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
   }
 
   const all = await findAllLinks(info, url);
-  const links = buildDisplayLinks(all);
+  const displayLinks = buildDisplayLinks(all);
 
-  // Log ALL platform URLs to Airtable (even ones not displayed)
+  // Log ALL platform URLs to Airtable
   const allLinks: PlatformLink[] = [
     { platform: "Spotify", url: all.spotify },
     { platform: "Apple Music", url: all.apple },
     { platform: "YouTube", url: all.youtube },
+    { platform: "SoundCloud", url: all.soundcloud },
   ];
   after(() => logConversion(url, platform, info, allLinks, submittedBy));
 
@@ -464,7 +470,7 @@ async function handleConvert(url: string, submittedBy?: string): Promise<Respons
       title: info.title,
       artist: info.artist,
       thumbnail: info.thumbnail,
-      links,
+      links: displayLinks,
     },
   } satisfies ConvertResult);
 }
