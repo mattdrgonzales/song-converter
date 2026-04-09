@@ -548,7 +548,20 @@ export default function Home() {
                         const hasSpotify = !!s.spotify_link;
                         const hasApple = !!s.apple_music_link;
                         const hasYouTube = !!s.youtube_link;
-                        const showYouTube = filterPlatform ? hasYouTube : hasYouTube && (!hasSpotify || !hasApple);
+
+                        // When filtering by platform, only show that platform's icon
+                        if (filterPlatform === "spotify") {
+                          return hasSpotify ? <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Spotify" /></a> : null;
+                        }
+                        if (filterPlatform === "apple") {
+                          return hasApple ? <a href={s.apple_music_link} target="_blank" rel="noopener noreferrer" title="Apple Music" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Apple Music" /></a> : null;
+                        }
+                        if (filterPlatform === "youtube") {
+                          return hasYouTube ? <a href={s.youtube_link} target="_blank" rel="noopener noreferrer" title="YouTube" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="YouTube" /></a> : null;
+                        }
+
+                        // No filter: smart display logic
+                        const showYouTube = hasYouTube && (!hasSpotify || !hasApple);
                         return (
                           <>
                             {hasSpotify && <a href={s.spotify_link} target="_blank" rel="noopener noreferrer" title="Spotify" className="p-1.5 -m-1 active:opacity-60 transition-opacity"><PlatformIcon platform="Spotify" /></a>}
